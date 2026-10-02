@@ -22,7 +22,7 @@
 ## 🏗️ System Architecture
 
 ```mermaid
-flowchart TD
+flowchart LR
     subgraph CICD [CI/CD]
         CI[GitHub Actions]
     end
