@@ -1,4 +1,4 @@
-# 🚀 Omni-Tracker: High-Speed Price & Market Intelligence Platform
+# 🚀 High-Speed Price & Market Intelligence Platform
 
 [![Go](https://img.shields.io/badge/Go-00ADD8?style=flat&logo=go&logoColor=white)](https://go.dev/)
 [![Playwright](https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white)](https://playwright.dev/)
@@ -23,8 +23,9 @@
 
 ```mermaid
 flowchart LR
-    subgraph CICD [CI/CD]
-        CI[GitHub Actions]
+    subgraph Automation [CI/CD & Scheduler]
+        CI[GitHub Actions CI/CD]
+        CRON[Cron Job Scheduler]
     end
 
     subgraph Scrapers [Scraper Fleet - Node.js + Playwright]
@@ -32,9 +33,9 @@ flowchart LR
         S2[Worker 2]
     end
 
-    subgraph Core [Core Platform - Golang + InfluxDB]
-        GO["Go Fiber API High Concurrency"]
-        DB[("InfluxDB Time-Series")]
+    subgraph Core [Core Platform]
+        GO["Go Fiber API\nHigh Concurrency"]
+        DB[("InfluxDB\nTime-Series")]
         ALERT[Alert Engine]
     end
     
@@ -43,13 +44,15 @@ flowchart LR
         ECOM[Shopee/Lazada]
     end
 
+    CRON -->|Triggers every hour| S1
+    CRON -->|Triggers every hour| S2
     S1 -->|Scrape| ECOM
     S1 -->|POST /api/prices| GO
     S2 -->|POST /api/prices| GO
     GO -->|Batch Write| DB
     ALERT -->|Query Trends| DB
     ALERT -->|Trigger Webhook| LINE
-    CI -.->|Automated Build & Test| GO
+    CI -.->|Build & Test| GO
 ```
 
 ---

@@ -1,0 +1,38 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  test-and-build-go:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+        
+    - name: Run Go Tests
+      working-directory: ./api
+      run: go test ./...
+      
+    - name: Build Go Docker Image
+      run: docker build -t thitipongroo/omni-go-api:latest ./api
+
+  test-and-build-scraper:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '24'
+        
+    - name: Build Playwright Docker Image
+      run: docker build -t thitipongroo/omni-scraper:latest ./scraper
