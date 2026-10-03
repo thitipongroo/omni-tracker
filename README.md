@@ -7,6 +7,7 @@
 [![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat&logo=redis&logoColor=white)](https://redis.io/)
 [![InfluxDB](https://img.shields.io/badge/InfluxDB-22ADF6?style=flat&logo=influxdb&logoColor=white)](https://www.influxdata.com/)
 [![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)](https://www.docker.com/)
+[![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=flat&logo=github-actions&logoColor=white)](https://github.com/features/actions)
 
 **Omni-Tracker** is a distributed, high-concurrency market intelligence platform. It treats web scrapers as "IoT sensors" that ingest thousands of data points concurrently. Version 2.0 introduces a robust microservices architecture featuring a centralized Database, Caching layer, and a beautiful Web Dashboard.
 
@@ -19,6 +20,7 @@
 - **Advanced Headless Scraping:** Leverages **Playwright + Stealth Plugin** to bypass modern e-commerce anti-bot protections.
 - **Smart Concurrency & Looping:** Node.js worker automatically loops via `node-cron` and processes tasks in concurrent chunks using `Promise.all`.
 - **Glassmorphism Dashboard:** A stunning Vanilla HTML/CSS/JS frontend to manage tracked products and view active scraping tasks.
+- **Automated CI/CD:** GitHub Actions pipeline for linting, testing, and building Docker images.
 - **Event-Driven Alerts:** Real-time notifications via LINE Messaging API when prices drop.
 
 ---
@@ -27,6 +29,10 @@
 
 ```mermaid
 flowchart LR
+    subgraph Automation [CI/CD]
+        CI[GitHub Actions]
+    end
+
     subgraph Frontend [UI Layer]
         DASH[Web Dashboard]
     end
@@ -58,6 +64,8 @@ flowchart LR
     GO <-->|Check Last Price| REDIS
     GO -->|Async Write| INFLUX
     GO -->|Webhook| LINE
+    CI -.->|Build & Deploy| GO
+    CI -.->|Build & Deploy| S1
 ```
 
 ---
