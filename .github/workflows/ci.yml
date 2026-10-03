@@ -27,6 +27,7 @@ jobs:
         version: latest
         working-directory: api
         args: --timeout=5m
+        skip-cache: true
         
     - name: Run Go Tests
       working-directory: ./api
