@@ -2,6 +2,7 @@ package main
 
 import (
 	"testing"
+	"omni-tracker-api/internal/service"
 )
 
 func TestEvaluatePriceDrop(t *testing.T) {
@@ -19,7 +20,7 @@ func TestEvaluatePriceDrop(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := EvaluatePriceDrop(tt.lastPrice, tt.newPrice)
+			result := service.EvaluatePriceDrop(tt.lastPrice, tt.newPrice)
 			if result != tt.expected {
 				t.Errorf("EvaluatePriceDrop(%v, %v) = %v; want %v", tt.lastPrice, tt.newPrice, result, tt.expected)
 			}
