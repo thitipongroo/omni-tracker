@@ -41,13 +41,15 @@ flowchart LR
     
     subgraph External [External Services]
         LINE[LINE Bot API]
-        ECOM[Shopee/Lazada]
+        ECOM1[Shopee]
+        ECOM2[Lazada]
     end
 
     CRON -->|Every 1 hour| S1
     CRON -->|Every 1 hour| S2
-    S1 -->|Scrape| ECOM
+    S1 -->|Scrape| ECOM1
     S1 -->|POST /api/prices| GO
+    S2 -->|Scrape| ECOM2
     S2 -->|POST /api/prices| GO
     GO -->|Batch Write| DB
     ALERT -->|Query Trends| DB
