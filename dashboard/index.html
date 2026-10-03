@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Omni-Tracker Dashboard</title>
+    <title>Omni-Tracker Dashboard v3</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -13,27 +14,61 @@
         <div class="orb orb-2"></div>
     </div>
     
-    <div class="container glass-panel">
+    <!-- Login Overlay -->
+    <div id="loginOverlay" class="overlay active">
+        <div class="glass-panel login-box">
+            <h2>Admin Login</h2>
+            <form id="loginForm">
+                <input type="password" id="password" placeholder="Enter Password" required>
+                <button type="submit" class="btn-primary">Login</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Chart Overlay -->
+    <div id="chartOverlay" class="overlay">
+        <div class="glass-panel chart-box">
+            <button id="closeChart" class="btn-delete" style="float: right;">Close</button>
+            <h2 id="chartTitle">Price History</h2>
+            <canvas id="priceChart"></canvas>
+        </div>
+    </div>
+
+    <div class="container glass-panel" id="mainContent" style="display: none;">
         <header>
             <h1>Omni-Tracker <span>Intelligence</span></h1>
             <p>Real-time Market Monitoring Platform</p>
+            <button onclick="logout()" class="btn-delete" style="position: absolute; right: 2.5rem; top: 2.5rem;">Logout</button>
         </header>
 
-        <section class="add-product-section">
-            <h2>Track New Product</h2>
-            <form id="addProductForm">
-                <input type="text" id="productId" placeholder="Product ID (e.g. iphone-15)" required>
-                <select id="store" required>
-                    <option value="shopee">Shopee</option>
-                    <option value="lazada">Lazada</option>
-                    <option value="amazon">Amazon</option>
-                </select>
-                <input type="url" id="productUrl" placeholder="Product URL" required>
-                <button type="submit" class="btn-primary">Add Task</button>
-            </form>
-        </section>
+        <div class="split-section">
+            <section class="add-product-section">
+                <h2>Track New Product</h2>
+                <form id="addProductForm">
+                    <input type="text" id="productId" placeholder="Product ID (e.g. iphone-15)" required>
+                    <select id="store" required>
+                        <option value="shopee">Shopee</option>
+                        <option value="lazada">Lazada</option>
+                    </select>
+                    <input type="url" id="productUrl" placeholder="Product URL" required>
+                    <button type="submit" class="btn-primary">Add Task</button>
+                </form>
+            </section>
+            
+            <section class="config-section">
+                <h2>Dynamic CSS Selectors</h2>
+                <form id="configForm">
+                    <select id="configStore" required>
+                        <option value="shopee">Shopee</option>
+                        <option value="lazada">Lazada</option>
+                    </select>
+                    <input type="text" id="configSelector" placeholder="CSS Selector (e.g. .product-price)" required>
+                    <button type="submit" class="btn-primary">Update Config</button>
+                </form>
+            </section>
+        </div>
 
-        <section class="tracked-products-section">
+        <section class="tracked-products-section" style="margin-top: 2rem;">
             <h2>Active Scrape Tasks</h2>
             <div class="table-container">
                 <table id="productsTable">
@@ -43,6 +78,7 @@
                             <th>Product ID</th>
                             <th>Store</th>
                             <th>Status</th>
+                            <th>Last Scraped</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
