@@ -1,13 +1,13 @@
 module omni-tracker-api
 
-go 1.22.0
+go 1.26.0
 
 require (
 	github.com/gofiber/fiber/v2 v2.52.15
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/influxdata/influxdb-client-go/v2 v2.13.0
 	github.com/redis/go-redis/v9 v9.22.0
-	golang.org/x/crypto v0.57.0
+	golang.org/x/crypto v0.55.0
 	gorm.io/driver/postgres v1.6.0
 	gorm.io/gorm v1.31.2
 )
