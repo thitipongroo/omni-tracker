@@ -52,7 +52,8 @@ flowchart LR
     GO -->|Batch Write| DB
     ALERT -->|Query Trends| DB
     ALERT -->|Webhook| LINE
-    CI -.->|Build & Test| GO
+    CI -.->|Build & Push| GO
+    CI -.->|Build & Push| S1
 ```
 
 ---
