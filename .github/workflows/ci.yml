@@ -18,15 +18,13 @@ jobs:
         go-version: '1.22'
         cache: false
         
-    - name: Prepare Go Modules
-      working-directory: ./api
-      run: go mod tidy
-
-    - name: Run golangci-lint manually
-      working-directory: ./api
-      run: |
-        curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.64.8
-        $(go env GOPATH)/bin/golangci-lint run -v --timeout=5m
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@v6
+      with:
+        version: latest
+        working-directory: api
+        args: --timeout=5m
+        skip-cache: true
         
     - name: Run Go Tests
       working-directory: ./api
