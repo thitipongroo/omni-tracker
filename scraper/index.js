@@ -2,24 +2,20 @@ require('dotenv').config();
 const { chromium } = require('playwright-extra');
 const stealth = require('puppeteer-extra-plugin-stealth')();
 const axios = require('axios');
-const cron = require('node-cron');
+const Redis = require('ioredis');
 
 chromium.use(stealth);
 
 const API_URL = process.env.GO_API_URL || 'http://go-api:3000';
 const API_KEY = process.env.API_KEY || 'my-internal-secret-key';
+let redisUrl = process.env.REDIS_URL || 'redis:6379';
+if (!redisUrl.startsWith('redis://')) {
+    redisUrl = 'redis://' + redisUrl;
+}
 const CONCURRENCY_LIMIT = 3;
 
-async function fetchTasks() {
-    try {
-        const response = await axios.get(`${API_URL}/api/tasks`, {
-            headers: { 'Authorization': `Bearer ${API_KEY}` }
-        });
-        return response.data;
-    } catch (error) {
-        console.error('❌ Failed to fetch tasks:', error.message);
-        return [];
-    }
+function createRedisClient() {
+    return new Redis(redisUrl);
 }
 
 async function reportStatus(taskId, status) {
@@ -32,7 +28,10 @@ async function reportStatus(taskId, status) {
     }
 }
 
-async function scrapePrice(context, task) {
+async function processTask(browser, task) {
+    const context = await browser.newContext({
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    });
     const page = await context.newPage();
     try {
         console.log(`🔍 [${task.product_id}] Scraping at ${task.store}...`);
@@ -40,15 +39,13 @@ async function scrapePrice(context, task) {
         await page.waitForTimeout(3000); 
 
         let priceValue = 0;
-        
-        // Use Dynamic Selector from Postgres
         if (task.selector) {
             try {
                 const priceText = await page.locator(task.selector).first().innerText({ timeout: 5000 });
                 priceValue = parseFloat(priceText.replace(/[^0-9.-]+/g, ""));
                 if (isNaN(priceValue)) priceValue = 0;
             } catch (err) {
-                console.log(`⚠️ Selector '${task.selector}' not found for ${task.product_id}. Using fallback.`);
+                console.log(`⚠️ Selector '${task.selector}' not found. Using fallback.`);
                 priceValue = Math.floor(Math.random() * (15000 - 10000 + 1)) + 10000;
             }
         } else {
@@ -71,35 +68,38 @@ async function scrapePrice(context, task) {
         console.error(`❌ [${task.product_id}] Scraping failed:`, error.message);
         await reportStatus(task.id, 'FAILED');
     } finally {
-        await page.close(); 
+        await context.close();
     }
 }
 
-async function runScraperCycle() {
-    console.log(`\n⏰ [${new Date().toISOString()}] Starting Scraper Cycle...`);
-    const tasks = await fetchTasks();
-    if (!tasks || tasks.length === 0) {
-        console.log('💤 No active tasks.');
-        return;
+async function workerLoop(workerId, browser) {
+    const redis = createRedisClient();
+    console.log(`👷 Worker ${workerId} started and waiting for tasks in Queue...`);
+    
+    while (true) {
+        try {
+            // BRPOP blocks indefinitely (0) until a task arrives in 'scraper_tasks'
+            const result = await redis.brpop('scraper_tasks', 0); 
+            if (result) {
+                const task = JSON.parse(result[1]);
+                console.log(`👷 Worker ${workerId} picked up task: ${task.product_id}`);
+                await processTask(browser, task);
+            }
+        } catch (error) {
+            console.error(`👷 Worker ${workerId} encountered Redis error:`, error.message);
+            await new Promise(r => setTimeout(r, 5000)); // Sleep before retry to avoid CPU spin
+        }
     }
+}
 
+async function initScraperFleet() {
+    console.log('🚀 Initializing Scraper Fleet (Message Queue Consumer)...');
     const browser = await chromium.launch({ headless: true });
-    const context = await browser.newContext({
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    });
-
-    for (let i = 0; i < tasks.length; i += CONCURRENCY_LIMIT) {
-        const batch = tasks.slice(i, i + CONCURRENCY_LIMIT);
-        console.log(`🚀 Processing batch ${Math.floor(i/CONCURRENCY_LIMIT) + 1}...`);
-        await Promise.all(batch.map(task => scrapePrice(context, task)));
+    
+    // Spawn isolated concurrent workers
+    for (let i = 1; i <= CONCURRENCY_LIMIT; i++) {
+        workerLoop(i, browser);
     }
-
-    await browser.close();
-    console.log('🏁 Scraper Cycle Finished.');
 }
 
-runScraperCycle();
-cron.schedule('*/10 * * * *', () => {
-    runScraperCycle();
-});
-console.log('⏳ Scraper Service initialized. Waiting for jobs...');
+initScraperFleet();

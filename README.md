@@ -1,4 +1,4 @@
-# 🚀 Omni-Tracker: Market Intelligence Platform
+# 🚀 Omni-Tracker: Market Intelligence Platform (v3.0)
 
 [![Go](https://img.shields.io/badge/Go-00ADD8?style=flat&logo=go&logoColor=white)](https://go.dev/)
 [![Node.js](https://img.shields.io/badge/Node.js-339933?style=flat&logo=node.js&logoColor=white)](https://nodejs.org/)
@@ -9,19 +9,19 @@
 [![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)](https://www.docker.com/)
 [![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=flat&logo=github-actions&logoColor=white)](https://github.com/features/actions)
 
-**Omni-Tracker** is a distributed, high-concurrency market intelligence platform. It treats web scrapers as "IoT sensors" that ingest thousands of data points concurrently. Version 2.0 introduces a robust microservices architecture featuring a centralized Database, Caching layer, and a beautiful Web Dashboard.
+**Omni-Tracker** is a distributed, high-concurrency market intelligence platform. It treats web scrapers as "IoT sensors" that ingest thousands of data points concurrently. Version 3.0 elevates the system to an Enterprise-grade Architecture by introducing **Clean Architecture in Go**, **Redis Message Queues** for concurrency control, and **Advanced Data Visualization**.
 
 ## ✨ Features
 
-- **High-Concurrency Ingestion:** Built with Go Fiber to handle massive traffic spikes.
-- **Relational Task Management:** Uses **PostgreSQL + GORM** to dynamically manage and distribute scraping tasks via REST API.
-- **Ultra-Fast Alerting Engine:** Utilizes **Redis** as an in-memory cache to evaluate price drops in milliseconds, drastically reducing read-load on the primary time-series DB.
-- **Time-Series Storage:** Stores historical price trends and fluctuations in **InfluxDB** for deep analytics.
+- **Go Clean Architecture:** Backend heavily refactored into a scalable Standard Go Layout (Handlers, Services, Repositories).
+- **Redis Task Queue:** Go API automatically schedules and pushes scraping tasks into a Redis Queue (`LPUSH`). Node.js workers act as isolated consumers (`BRPOP`) to eliminate memory leaks and overlapping cron jobs.
+- **Relational Task Management:** Uses **PostgreSQL + GORM** to dynamically manage active URLs and track the real-time status of scrapers (`SUCCESS` / `FAILED`).
+- **Data Visualization & Analytics:** A beautiful **Chart.js** modal integrated with **InfluxDB** historical price data directly on the Dashboard.
+- **Secure Dashboard Authentication:** Web UI protected by token-based Admin Login.
+- **Dynamic DOM Extractors:** Change scraping CSS selectors (e.g. Shopee/Lazada classes) on the fly via the Dashboard without touching source code.
 - **Advanced Headless Scraping:** Leverages **Playwright + Stealth Plugin** to bypass modern e-commerce anti-bot protections.
-- **Smart Concurrency & Looping:** Node.js worker automatically loops via `node-cron` and processes tasks in concurrent chunks using `Promise.all`.
-- **Glassmorphism Dashboard:** A stunning Vanilla HTML/CSS/JS frontend to manage tracked products and view active scraping tasks.
-- **Automated CI/CD:** GitHub Actions pipeline for linting, testing, and building Docker images.
 - **Event-Driven Alerts:** Real-time notifications via LINE Messaging API when prices drop.
+- **Automated CI/CD:** GitHub Actions pipeline for linting, testing, and building Docker images.
 
 ---
 
@@ -34,11 +34,12 @@ flowchart LR
     end
 
     subgraph Frontend [UI Layer]
-        DASH[Web Dashboard]
+        DASH[Web Dashboard & Charts]
     end
 
     subgraph Scrapers [Scraper Fleet - Node.js]
-        S1[Playwright Worker]
+        S1[Playwright Worker 1]
+        S2[Playwright Worker 2]
     end
 
     subgraph Core [Core API - Go]
@@ -47,19 +48,21 @@ flowchart LR
     
     subgraph Data [Data Layer]
         PG[(PostgreSQL\nTasks/Config)]
-        REDIS[(Redis\nPrice Cache)]
+        REDIS[(Redis\nCache & Queue)]
         INFLUX[(InfluxDB\nTime-Series)]
     end
     
     subgraph External [External Services]
         LINE[LINE Notify]
-        ECOM1[Shopee / Lazada]
+        ECOM[Shopee / Lazada]
     end
 
-    DASH <-->|REST API| GO
-    S1 -->|Fetch Tasks| GO
+    DASH <-->|JWT Auth & REST| GO
+    GO -->|Cron: LPUSH Tasks| REDIS
+    S1 -->|BRPOP: Consume Task| REDIS
+    S2 -->|BRPOP: Consume Task| REDIS
     GO <-->|Query/Update| PG
-    S1 -->|Scrape Data| ECOM1
+    S1 -->|Scrape Data| ECOM
     S1 -->|POST /prices| GO
     GO <-->|Check Last Price| REDIS
     GO -->|Async Write| INFLUX
@@ -85,16 +88,17 @@ flowchart LR
    ```
 
 2. **Configure Environment Variables:**
-   Edit the `.env` file and insert your `LINE_NOTIFY_TOKEN` (or leave it blank to disable alerts).
+   Edit the `.env` file and insert your `LINE_NOTIFY_TOKEN` (or leave it blank to disable alerts). You can also configure `ADMIN_PASSWORD` (default: `admin123`).
 
 3. **Start the ecosystem via Docker:**
    ```bash
    docker-compose up -d --build
    ```
-   *This command spins up PostgreSQL, Redis, InfluxDB, the Golang API, and the Scraper Worker.*
+   *This command spins up PostgreSQL, Redis, InfluxDB, the Golang API, and the Scraper Worker fleet.*
 
 4. **Access the Dashboard:**
    Open your browser and navigate to: [http://localhost:3000](http://localhost:3000)
+   *(Default Login Password: `admin123`)*
 
 ---
 
@@ -104,19 +108,25 @@ flowchart LR
 omni-tracker/
 ├── .github/workflows/
 │   └── ci.yml               # GitHub Actions CI/CD Pipeline
-├── api/                     # Golang Backend (Fiber, GORM, Redis, InfluxDB)
-│   ├── Dockerfile
-│   ├── go.mod
-│   └── main.go
+├── api/                     # Golang Backend 
+│   ├── internal/            # Clean Architecture Core
+│   │   ├── config/          # Environment configuration
+│   │   ├── handler/         # HTTP Routing & Auth logic
+│   │   ├── models/          # Structs & Data models
+│   │   ├── repository/      # GORM, Redis, and InfluxDB instances
+│   │   └── service/         # Task Scheduler & Alerting logic
+│   ├── main.go              # Entry Point
+│   ├── main_test.go         # Unit Tests
+│   └── Dockerfile
 ├── dashboard/               # Frontend UI (Vanilla HTML/CSS/JS)
-│   ├── index.html
+│   ├── index.html           # Authentication, Forms, Modals
 │   ├── style.css
-│   └── app.js
-├── scraper/                 # Node.js Scraper (Playwright, Stealth, Cron)
+│   └── app.js               # Chart.js and API integrations
+├── scraper/                 # Node.js Scraper (Playwright, Redis Queue)
 │   ├── Dockerfile
-│   ├── index.js
+│   ├── index.js             # Message Queue Consumers (Workers)
 │   └── package.json
-├── docker-compose.yml       # Orchestrates the entire microservice stack
+├── docker-compose.yml       # Orchestrates the microservice stack
 ├── .env                     # Configuration and secrets
 └── .gitignore               # Ignored files
 ```

@@ -8,6 +8,7 @@ import (
 	"omni-tracker-api/internal/config"
 	"omni-tracker-api/internal/handler"
 	"omni-tracker-api/internal/repository"
+	"omni-tracker-api/internal/service"
 )
 
 func main() {
@@ -46,6 +47,9 @@ func main() {
 	protected.Get("/tasks", handler.GetTasks)
 	protected.Patch("/products/:id/status", handler.UpdateStatus)
 	protected.Post("/prices", handler.PostPrice(cfg))
+
+	// Start internal background cron to push tasks to Message Queue
+	service.StartTaskScheduler()
 
 	log.Printf("🚀 Omni-Tracker API starting on port %s...", cfg.APIPort)
 	log.Fatal(app.Listen(":" + cfg.APIPort))
