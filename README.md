@@ -84,10 +84,20 @@ flowchart LR
 
 ## 📁 Project Structure
 
-- `/api` - Golang ingestion API and alerting engine.
-- `/scraper` - Node.js and Playwright scraping scripts.
-- `/.github/workflows` - CI/CD pipelines.
-- `docker-compose.yml` - Infrastructure orchestration.
+```text
+omni-tracker/
+├── .github/workflows/
+│   └── ci.yml               # GitHub Actions CI/CD Pipeline
+├── api/                     # Golang Backend
+│   ├── main.go              # Go Ingestion API & Alert Engine
+│   ├── go.mod
+│   └── Dockerfile
+├── scraper/                 # Playwright Scraper
+│   ├── index.js             # Node.js scraping logic
+│   ├── package.json
+│   └── Dockerfile
+└── docker-compose.yml       # Orchestrates Go, Node, and InfluxDB
+```
 
 ---
 
