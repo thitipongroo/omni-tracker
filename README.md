@@ -31,11 +31,11 @@ flowchart LR
         DASH[Web Dashboard]
     end
 
-    subgraph Scrapers [Scraper Fleet (Node.js)]
+    subgraph Scrapers [Scraper Fleet - Node.js]
         S1[Playwright Worker]
     end
 
-    subgraph Core [Core API (Go Fiber)]
+    subgraph Core [Core API - Go]
         GO["API Gateway\n& Alert Engine"]
     end
     
