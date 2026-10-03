@@ -23,12 +23,12 @@
 
 ```mermaid
 flowchart LR
-    subgraph Automation [CI/CD & Scheduler]
-        CI[GitHub Actions CI/CD]
-        CRON[Cron Job Scheduler]
+    subgraph Automation [Automation]
+        CI[GitHub Actions]
+        CRON[Job Scheduler]
     end
 
-    subgraph Scrapers [Scraper Fleet - Node.js + Playwright]
+    subgraph Scrapers [Scraper Fleet]
         S1[Worker 1]
         S2[Worker 2]
     end
@@ -44,14 +44,14 @@ flowchart LR
         ECOM[Shopee/Lazada]
     end
 
-    CRON -->|Triggers every hour| S1
-    CRON -->|Triggers every hour| S2
+    CRON -->|Every 1 hour| S1
+    CRON -->|Every 1 hour| S2
     S1 -->|Scrape| ECOM
     S1 -->|POST /api/prices| GO
     S2 -->|POST /api/prices| GO
     GO -->|Batch Write| DB
     ALERT -->|Query Trends| DB
-    ALERT -->|Trigger Webhook| LINE
+    ALERT -->|Webhook| LINE
     CI -.->|Build & Test| GO
 ```
 
