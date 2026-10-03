@@ -12,27 +12,7 @@ import (
 	"omni-tracker-api/internal/service"
 )
 
-func GetTasks(c *fiber.Ctx) error {
-	var products []models.Product
-	repository.DB.Where("is_active = ?", true).Find(&products)
-	
-	var configs []models.StoreConfig
-	repository.DB.Find(&configs)
-	
-	cfgMap := make(map[string]string)
-	for _, cfg := range configs {
-		cfgMap[cfg.Store] = cfg.Selector
-	}
 
-	var tasks []models.TaskResponse
-	for _, p := range products {
-		tasks = append(tasks, models.TaskResponse{
-			Product:  p,
-			Selector: cfgMap[p.Store],
-		})
-	}
-	return c.JSON(tasks)
-}
 
 func UpdateStatus(c *fiber.Ctx) error {
 	var payload struct {

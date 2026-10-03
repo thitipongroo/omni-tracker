@@ -2,6 +2,9 @@ package handler
 
 import (
 	"fmt"
+	"net/url"
+	"regexp"
+	"strings"
 	"github.com/gofiber/fiber/v2"
 	"omni-tracker-api/internal/config"
 	"omni-tracker-api/internal/models"
@@ -24,6 +27,24 @@ func AddProduct(c *fiber.Ctx) error {
 	if err := c.BodyParser(p); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "invalid payload"})
 	}
+
+	// SSRF Protection: Validate URL scheme and host whitelist
+	parsedURL, err := url.ParseRequestURI(p.URL)
+	if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") {
+		return c.Status(400).JSON(fiber.Map{"error": "invalid url"})
+	}
+	validHosts := []string{"shopee.co.th", "lazada.co.th"}
+	isValidHost := false
+	for _, host := range validHosts {
+		if strings.HasSuffix(parsedURL.Host, host) {
+			isValidHost = true
+			break
+		}
+	}
+	if !isValidHost {
+		return c.Status(400).JSON(fiber.Map{"error": "domain not allowed"})
+	}
+
 	if userID, ok := c.Locals("userID").(uint); ok {
 		p.UserID = userID
 	}
@@ -44,6 +65,13 @@ func DeleteProduct(c *fiber.Ctx) error {
 func GetHistory(cfg *config.Config) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		pid := c.Params("product_id")
+
+		// Prevent InfluxQL Injection
+		validID := regexp.MustCompile(`^[a-zA-Z0-9\-_]+$`)
+		if !validID.MatchString(pid) {
+			return c.Status(400).JSON(fiber.Map{"error": "invalid product id format"})
+		}
+
 		query := fmt.Sprintf(`from(bucket:"%s") 
 			|> range(start: -14d) 
 			|> filter(fn: (r) => r._measurement == "product_price" and r.product_id == "%s")

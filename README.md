@@ -1,7 +1,10 @@
-# 🚀 Omni-Tracker: Market Intelligence Platform (v3.0)
+# 🚀 Omni-Tracker: Market Intelligence Platform (v3.1)
 
 [![Go](https://img.shields.io/badge/Go-00ADD8?style=flat&logo=go&logoColor=white)](https://go.dev/)
 [![Node.js](https://img.shields.io/badge/Node.js-339933?style=flat&logo=node.js&logoColor=white)](https://nodejs.org/)
+[![React](https://img.shields.io/badge/React-61DAFB?style=flat&logo=react&logoColor=black)](https://reactjs.org/)
+[![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat&logo=vite&logoColor=white)](https://vitejs.dev/)
+[![TailwindCSS](https://img.shields.io/badge/TailwindCSS-06B6D4?style=flat&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![Playwright](https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white)](https://playwright.dev/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=flat&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat&logo=redis&logoColor=white)](https://redis.io/)
@@ -9,17 +12,22 @@
 [![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)](https://www.docker.com/)
 [![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=flat&logo=github-actions&logoColor=white)](https://github.com/features/actions)
 
-**Omni-Tracker** is a distributed, high-concurrency market intelligence platform. It treats web scrapers as "IoT sensors" that ingest thousands of data points concurrently. Version 3.0 elevates the system to an Enterprise-grade Architecture by introducing **Clean Architecture in Go**, **Redis Message Queues** for concurrency control, and **Advanced Data Visualization**.
+**Omni-Tracker** is a distributed, high-concurrency market intelligence platform. It treats web scrapers as "IoT sensors" that ingest thousands of data points concurrently. Version 3.1 elevates the system to an Enterprise-grade Architecture by introducing **Clean Architecture in Go**, **React + Vite Dashboard**, **Redis Message Queues** for concurrency control, and robust **Security & Performance Patches**.
 
 ## ✨ Features
 
+- **Modern Frontend (React + Vite):** A beautiful, responsive dashboard built with React 19, TailwindCSS, and Lucide icons.
 - **Go Clean Architecture:** Backend heavily refactored into a scalable Standard Go Layout (Handlers, Services, Repositories).
 - **Redis Task Queue:** Go API automatically schedules and pushes scraping tasks into a Redis Queue (`LPUSH`). Node.js workers act as isolated consumers (`BRPOP`) to eliminate memory leaks and overlapping cron jobs.
-- **Relational Task Management:** Uses **PostgreSQL + GORM** to dynamically manage active URLs and track the real-time status of scrapers (`SUCCESS` / `FAILED`).
-- **Data Visualization & Analytics:** A beautiful **Chart.js** modal integrated with **InfluxDB** historical price data directly on the Dashboard.
-- **Secure Dashboard Authentication:** Web UI protected by token-based Admin Login.
-- **Dynamic DOM Extractors:** Change scraping CSS selectors (e.g. Shopee/Lazada classes) on the fly via the Dashboard without touching source code.
-- **Advanced Headless Scraping:** Leverages **Playwright + Stealth Plugin** to bypass modern e-commerce anti-bot protections.
+- **Relational Task Management:** Uses **PostgreSQL + GORM** with optimized database indexes to dynamically manage active URLs and track the real-time status of scrapers (`SUCCESS` / `FAILED`).
+- **Data Visualization & Analytics:** A beautiful **Recharts/Chart.js** modal integrated with **InfluxDB** historical price data directly on the Dashboard.
+- **Enterprise-Grade Security:**
+  - Token-based Admin Login with **Bcrypt Password Hashing**.
+  - **SSRF (Server-Side Request Forgery) Protection** with strict URL Validation and Domain Whitelisting.
+  - **InfluxQL Injection Prevention**.
+  - **Rate Limiting** on critical endpoints to prevent DoS attacks.
+  - **Environment Variable Enforcement** ensuring critical secrets are strictly configured.
+- **Advanced Headless Scraping:** Leverages **Playwright + Stealth Plugin** to bypass modern e-commerce anti-bot protections. NetworkIdle-based synchronization maximizes throughput.
 - **Event-Driven Alerts:** Real-time notifications via LINE Messaging API when prices drop.
 - **Automated CI/CD:** GitHub Actions pipeline for linting, testing, and building Docker images.
 
@@ -34,7 +42,7 @@ flowchart LR
     end
 
     subgraph Frontend [UI Layer]
-        DASH[Web Dashboard & Charts]
+        DASH[React Dashboard]
     end
 
     subgraph Scrapers [Scraper Fleet - Node.js]
@@ -88,17 +96,17 @@ flowchart LR
    ```
 
 2. **Configure Environment Variables:**
-   Edit the `.env` file and insert your `LINE_NOTIFY_TOKEN` (or leave it blank to disable alerts). You can also configure `ADMIN_PASSWORD` (default: `admin123`).
+   Edit the `.env` file and insert your `LINE_NOTIFY_TOKEN` (or leave it blank to disable alerts). You MUST provide `API_KEY` and `JWT_SECRET` for the system to boot securely.
 
 3. **Start the ecosystem via Docker:**
    ```bash
    docker-compose up -d --build
    ```
-   *This command spins up PostgreSQL, Redis, InfluxDB, the Golang API, and the Scraper Worker fleet.*
+   *This command spins up PostgreSQL, Redis, InfluxDB, the Golang API (which statically serves the pre-built React frontend), and the Scraper Worker fleet.*
 
 4. **Access the Dashboard:**
    Open your browser and navigate to: [http://localhost:3000](http://localhost:3000)
-   *(Default Login Password: `admin123`)*
+   *(Default Login Credentials - Username: `admin` / Password: `password123`)*
 
 ---
 
@@ -106,22 +114,21 @@ flowchart LR
 
 ```text
 omni-tracker/
-├── .github/workflows/
-│   └── ci.yml               # GitHub Actions CI/CD Pipeline
 ├── api/                     # Golang Backend 
 │   ├── internal/            # Clean Architecture Core
 │   │   ├── config/          # Environment configuration
-│   │   ├── handler/         # HTTP Routing & Auth logic
-│   │   ├── models/          # Structs & Data models
+│   │   ├── handler/         # HTTP Routing, Auth, Rate Limiting
+│   │   ├── models/          # Structs & Data models (GORM)
 │   │   ├── repository/      # GORM, Redis, and InfluxDB instances
 │   │   └── service/         # Task Scheduler & Alerting logic
 │   ├── main.go              # Entry Point
 │   ├── main_test.go         # Unit Tests
 │   └── Dockerfile
-├── dashboard/               # Frontend UI (Vanilla HTML/CSS/JS)
-│   ├── index.html           # Authentication, Forms, Modals
-│   ├── style.css
-│   └── app.js               # Chart.js and API integrations
+├── dashboard/               # Frontend UI (React + Vite + Tailwind)
+│   ├── src/                 # React Components
+│   ├── package.json         
+│   ├── vite.config.js       
+│   └── tailwind.config.js   
 ├── scraper/                 # Node.js Scraper (Playwright, Redis Queue)
 │   ├── Dockerfile
 │   ├── index.js             # Message Queue Consumers (Workers)

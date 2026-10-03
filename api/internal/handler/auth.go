@@ -6,6 +6,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/crypto/bcrypt"
 	"omni-tracker-api/internal/config"
 	"omni-tracker-api/internal/models"
 	"omni-tracker-api/internal/repository"
@@ -26,7 +27,7 @@ func Login(cfg *config.Config) fiber.Handler {
 			return c.Status(401).JSON(fiber.Map{"error": "Unauthorized"})
 		}
 
-		if payload.Password == user.Password {
+		if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(payload.Password)); err == nil {
 			// Generate JWT Token
 			token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 				"user_id": user.ID,
@@ -44,7 +45,7 @@ func Login(cfg *config.Config) fiber.Handler {
 	}
 }
 
-func AuthMiddleware(cfg *config.Config) fiber.Handler {
+func UserMiddleware(cfg *config.Config) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		authHeader := c.Get("Authorization")
 		if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
@@ -52,11 +53,6 @@ func AuthMiddleware(cfg *config.Config) fiber.Handler {
 		}
 		
 		tokenString := authHeader[7:]
-		
-		// Internal Service-to-Service auth (Scraper Bot uses static API_KEY)
-		if tokenString == cfg.APIKey {
-			return c.Next()
-		}
 
 		// Verify JWT for Dashboard Users
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
@@ -74,7 +70,37 @@ func AuthMiddleware(cfg *config.Config) fiber.Handler {
 		if userID, ok := claims["user_id"].(float64); ok {
 			c.Locals("userID", uint(userID))
 		}
+		if role, ok := claims["role"].(string); ok {
+			c.Locals("role", role)
+		}
 
 		return c.Next()
+	}
+}
+
+func AdminMiddleware() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		role, ok := c.Locals("role").(string)
+		if !ok || role != "admin" {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden: Admin access required"})
+		}
+		return c.Next()
+	}
+}
+
+func ScraperMiddleware(cfg *config.Config) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		authHeader := c.Get("Authorization")
+		if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Missing or invalid token format"})
+		}
+		
+		tokenString := authHeader[7:]
+		
+		if tokenString == cfg.APIKey {
+			return c.Next()
+		}
+		
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized Scraper"})
 	}
 }

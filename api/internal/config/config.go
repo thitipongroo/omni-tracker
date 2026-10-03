@@ -1,6 +1,9 @@
 package config
 
-import "os"
+import (
+	"log"
+	"os"
+)
 
 type Config struct {
 	InfluxURL    string
@@ -22,13 +25,13 @@ func LoadConfig() *Config {
 		InfluxToken:  getEnv("INFLUXDB_TOKEN", "super-secret-token"),
 		InfluxOrg:    getEnv("INFLUXDB_ORG", "my-org"),
 		InfluxBucket: getEnv("INFLUXDB_BUCKET", "market-data"),
-		APIKey:       getEnv("API_KEY", "my-internal-secret-key"),
+		APIKey:       getRequiredEnv("API_KEY"),
 		AdminPass:    getEnv("ADMIN_PASSWORD", "admin123"),
 		LineToken:    getEnv("LINE_NOTIFY_TOKEN", ""),
 		DatabaseURL:  getEnv("DATABASE_URL", "host=postgres user=admin password=admin dbname=omnitracker port=5432 sslmode=disable"),
 		RedisURL:     getEnv("REDIS_URL", "redis:6379"),
 		APIPort:      getEnv("API_PORT", "3000"),
-		JWTSecret:    getEnv("JWT_SECRET", "default-fallback-secret-key-1234"),
+		JWTSecret:    getRequiredEnv("JWT_SECRET"),
 	}
 }
 
@@ -37,4 +40,12 @@ func getEnv(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func getRequiredEnv(key string) string {
+	if value, exists := os.LookupEnv(key); exists && value != "" {
+		return value
+	}
+	log.Fatalf("Fatal: Environment variable %s is required but not set", key)
+	return ""
 }

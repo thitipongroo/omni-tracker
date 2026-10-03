@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"omni-tracker-api/internal/models"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -28,6 +29,13 @@ func InitDB(dsn string) {
 		log.Printf("Warning: AutoMigrate failed: %v", err)
 	}
 
+	sqlDB, err := DB.DB()
+	if err == nil {
+		sqlDB.SetMaxIdleConns(10)
+		sqlDB.SetMaxOpenConns(100)
+		sqlDB.SetConnMaxLifetime(time.Hour)
+	}
+
 	seedDefaults()
 }
 
@@ -42,6 +50,7 @@ func seedDefaults() {
 	var userCount int64
 	DB.Model(&models.User{}).Count(&userCount)
 	if userCount == 0 {
-		DB.Create(&models.User{Username: "admin", Password: "password123", Role: "admin"})
+		hashed, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
+		DB.Create(&models.User{Username: "admin", Password: string(hashed), Role: "admin"})
 	}
 }

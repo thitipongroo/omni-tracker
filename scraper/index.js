@@ -115,12 +115,13 @@ async function processTask(browser, task) {
             }
         });
 
-        await page.goto(task.url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+        await page.goto(task.url, { waitUntil: 'domcontentloaded', timeout: 30000 });
         
-        // Wait and simulate human behavior to ensure API calls are fired
-        await page.waitForTimeout(3000 + Math.random() * 2000); 
+        // Simulate human behavior while waiting for API calls
         await simulateHumanBehavior(page);
-        await page.waitForTimeout(2000); // Wait for potential delayed API responses
+        
+        // Wait for network to be idle instead of hardcoded sleep
+        await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
 
         let priceValue = 0;
         
@@ -166,32 +167,45 @@ async function processTask(browser, task) {
     }
 }
 
-async function workerLoop(workerId, browser) {
+let taskCount = 0;
+const MAX_TASKS_BEFORE_RESTART = 500;
+
+async function runScraperFleet() {
+    console.log('🚀 Initializing Evasive Scraper Fleet with Proxy Rotation & API Intercept...');
+    let browser = await chromium.launch({ headless: true });
+    
     const redis = createRedisClient();
-    console.log(`👷 Worker ${workerId} started and waiting for tasks in Queue...`);
+    console.log(`👷 Main Worker started, batch processing up to ${CONCURRENCY_LIMIT} tasks concurrently...`);
     
     while (true) {
         try {
-            const result = await redis.brpop('scraper_tasks', 0); 
-            if (result) {
-                const task = JSON.parse(result[1]);
-                console.log(`👷 Worker ${workerId} picked up task: ${task.product_id}`);
-                await processTask(browser, task);
+            let tasks = [];
+            for (let i = 0; i < CONCURRENCY_LIMIT; i++) {
+                const result = i === 0 ? await redis.brpop('scraper_tasks', 2) : await redis.rpop('scraper_tasks');
+                if (result) {
+                   tasks.push(JSON.parse(Array.isArray(result) ? result[1] : result));
+                } else {
+                   break;
+                }
+            }
+            
+            if (tasks.length > 0) {
+                console.log(`👷 Processing batch of ${tasks.length} tasks...`);
+                await Promise.all(tasks.map(task => processTask(browser, task).catch(e => console.error(e))));
+                
+                taskCount += tasks.length;
+                if (taskCount >= MAX_TASKS_BEFORE_RESTART) {
+                    console.log('♻️ Restarting browser to prevent memory leaks...');
+                    await browser.close();
+                    browser = await chromium.launch({ headless: true });
+                    taskCount = 0;
+                }
             }
         } catch (error) {
-            console.error(`👷 Worker ${workerId} encountered Redis error:`, error.message);
+            console.error(`👷 Worker encountered error:`, error.message);
             await new Promise(r => setTimeout(r, 5000));
         }
     }
 }
 
-async function initScraperFleet() {
-    console.log('🚀 Initializing Evasive Scraper Fleet with Proxy Rotation & API Intercept...');
-    const browser = await chromium.launch({ headless: true });
-    
-    for (let i = 1; i <= CONCURRENCY_LIMIT; i++) {
-        workerLoop(i, browser);
-    }
-}
-
-initScraperFleet();
+runScraperFleet();

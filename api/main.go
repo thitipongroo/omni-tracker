@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
+	"time"
 	"omni-tracker-api/internal/config"
 	"omni-tracker-api/internal/handler"
 	"omni-tracker-api/internal/repository"
@@ -20,38 +23,48 @@ func main() {
 	repository.InitInflux(cfg.InfluxURL, cfg.InfluxToken, cfg.InfluxOrg, cfg.InfluxBucket)
 
 	app := fiber.New()
-	app.Use(cors.New())
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: "http://localhost:3000, http://127.0.0.1:3000",
+		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
+	}))
 	
-	// Serve static UI
-	app.Static("/", "./dashboard")
+	// Serve static UI from dist
+	app.Static("/", "./dashboard/dist")
 
 	apiGroup := app.Group("/api")
 	
-	// Public Route
-	apiGroup.Post("/login", handler.Login(cfg))
+	// Public Route with Rate Limiter
+	apiGroup.Post("/login", limiter.New(limiter.Config{
+		Max:        5,
+		Expiration: 1 * time.Minute,
+	}), handler.Login(cfg))
 
-	// Protected Routes
-	protected := apiGroup.Group("", handler.AuthMiddleware(cfg))
+	// Protected User Routes
+	userRoutes := apiGroup.Group("", handler.UserMiddleware(cfg))
 	
 	// Product Management
-	protected.Get("/products", handler.GetProducts)
-	protected.Post("/products", handler.AddProduct)
-	protected.Delete("/products/:id", handler.DeleteProduct)
-	protected.Get("/history/:product_id", handler.GetHistory(cfg))
+	userRoutes.Get("/products", handler.GetProducts)
+	userRoutes.Post("/products", limiter.New(limiter.Config{
+		Max:        20,
+		Expiration: 1 * time.Minute,
+	}), handler.AddProduct)
+	userRoutes.Delete("/products/:id", handler.DeleteProduct)
+	userRoutes.Get("/history/:product_id", handler.GetHistory(cfg))
+	userRoutes.Get("/logs", handler.GetLogs)
 	
-	// Scraper Dynamic Configurations
-	protected.Get("/configs", handler.GetConfigs)
-	protected.Post("/configs", handler.UpdateConfig)
+	// Protected Admin Routes
+	adminRoutes := userRoutes.Group("", handler.AdminMiddleware())
+	adminRoutes.Get("/configs", handler.GetConfigs)
+	adminRoutes.Post("/configs", handler.UpdateConfig)
 	
-	// Scraper Worker Endpoints
-	protected.Get("/tasks", handler.GetTasks)
-	protected.Patch("/products/:id/status", handler.UpdateStatus)
-	protected.Post("/prices", handler.PostPrice(cfg))
-	protected.Get("/logs", handler.GetLogs)
-	protected.Post("/logs", handler.PostLog)
+	// Scraper Internal Routes
+	scraperRoutes := apiGroup.Group("", handler.ScraperMiddleware(cfg))
+	scraperRoutes.Patch("/products/:id/status", handler.UpdateStatus)
+	scraperRoutes.Post("/prices", handler.PostPrice(cfg))
+	scraperRoutes.Post("/logs", handler.PostLog)
 
 	// Start internal background cron to push tasks to Message Queue
-	service.StartTaskScheduler()
+	service.StartTaskScheduler(context.Background())
 
 	log.Printf("🚀 Omni-Tracker API starting on port %s...", cfg.APIPort)
 	log.Fatal(app.Listen(":" + cfg.APIPort))
