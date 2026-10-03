@@ -23,6 +23,21 @@ const USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0'
 ];
 
+async function sendLog(productId, store, message, level = 'INFO') {
+    try {
+        await axios.post(`${API_URL}/api/logs`, {
+            product_id: productId,
+            store: store,
+            message: message,
+            level: level
+        }, {
+            headers: { 'Authorization': `Bearer ${API_KEY}` }
+        });
+    } catch (error) {
+        console.error(`Failed to send log:`, error.message);
+    }
+}
+
 function createRedisClient() {
     return new Redis(redisUrl);
 }
@@ -58,6 +73,7 @@ async function processTask(browser, task) {
         const randomProxy = PROXY_URLS[Math.floor(Math.random() * PROXY_URLS.length)];
         contextOptions.proxy = { server: randomProxy };
         console.log(`🛡️ Assigned Rotating Proxy: ${randomProxy}`);
+        await sendLog(task.product_id, task.store, `Using proxy: ${randomProxy}`, 'INFO');
     }
 
     const context = await browser.newContext(contextOptions);
@@ -70,6 +86,7 @@ async function processTask(browser, task) {
 
     try {
         console.log(`🔍 [${task.product_id}] Scraping at ${task.store}...`);
+        await sendLog(task.product_id, task.store, `Started scraping URL: ${task.url}`, 'INFO');
         
         let interceptedPrice = null;
 
@@ -110,6 +127,7 @@ async function processTask(browser, task) {
         if (interceptedPrice !== null) {
             priceValue = interceptedPrice;
             console.log(`📡 [${task.product_id}] XHR Intercept Success! Price: ${priceValue} THB`);
+            await sendLog(task.product_id, task.store, `Intercepted JSON XHR Price: ${priceValue}`, 'SUCCESS');
         } else if (task.selector) {
             // Fallback to DOM parsing
             try {
@@ -119,8 +137,10 @@ async function processTask(browser, task) {
                 priceValue = parseFloat(priceText.replace(/[^0-9.-]+/g, ""));
                 if (isNaN(priceValue)) priceValue = 0;
                 console.log(`📦 [${task.product_id}] DOM Parse Success! Price: ${priceValue} THB`);
+                await sendLog(task.product_id, task.store, `DOM Parse Fallback Success: ${priceValue}`, 'INFO');
             } catch (err) {
                 console.log(`⚠️ API Intercept & Selector '${task.selector}' failed. Using fallback.`);
+                await sendLog(task.product_id, task.store, `DOM locator failed: ${err.message}`, 'WARN');
                 priceValue = Math.floor(Math.random() * (15000 - 10000 + 1)) + 10000;
             }
         } else {
@@ -139,6 +159,7 @@ async function processTask(browser, task) {
         await reportStatus(task.id, 'SUCCESS');
     } catch (error) {
         console.error(`❌ [${task.product_id}] Scraping failed:`, error.message);
+        await sendLog(task.product_id, task.store, `Playwright Crash: ${error.message}`, 'ERROR');
         await reportStatus(task.id, 'FAILED');
     } finally {
         await context.close();

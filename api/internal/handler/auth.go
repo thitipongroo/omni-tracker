@@ -7,21 +7,31 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
 	"omni-tracker-api/internal/config"
+	"omni-tracker-api/internal/models"
+	"omni-tracker-api/internal/repository"
 )
 
 func Login(cfg *config.Config) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var payload struct {
+			Username string `json:"username"`
 			Password string `json:"password"`
 		}
 		if err := c.BodyParser(&payload); err != nil {
 			return c.Status(400).SendString("Invalid body")
 		}
-		if payload.Password == cfg.AdminPass {
+		
+		var user models.User
+		if err := repository.DB.Where("username = ?", payload.Username).First(&user).Error; err != nil {
+			return c.Status(401).JSON(fiber.Map{"error": "Unauthorized"})
+		}
+
+		if payload.Password == user.Password {
 			// Generate JWT Token
 			token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-				"role": "admin",
-				"exp":  time.Now().Add(time.Hour * 24).Unix(), // 24 hours expiry
+				"user_id": user.ID,
+				"role":    user.Role,
+				"exp":     time.Now().Add(time.Hour * 24).Unix(),
 			})
 
 			tokenString, err := token.SignedString([]byte(cfg.JWTSecret))
@@ -58,6 +68,11 @@ func AuthMiddleware(cfg *config.Config) fiber.Handler {
 
 		if err != nil || !token.Valid {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid or expired JWT token"})
+		}
+
+		claims := token.Claims.(jwt.MapClaims)
+		if userID, ok := claims["user_id"].(float64); ok {
+			c.Locals("userID", uint(userID))
 		}
 
 		return c.Next()

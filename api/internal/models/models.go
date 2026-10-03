@@ -2,6 +2,13 @@ package models
 
 import "time"
 
+type User struct {
+	ID       uint   `gorm:"primaryKey" json:"id"`
+	Username string `gorm:"uniqueIndex;not null" json:"username"`
+	Password string `gorm:"not null" json:"-"`
+	Role     string `gorm:"default:'user'" json:"role"`
+}
+
 type StoreConfig struct {
 	ID       uint   `gorm:"primaryKey" json:"id"`
 	Store    string `gorm:"uniqueIndex;not null" json:"store"`
@@ -10,6 +17,7 @@ type StoreConfig struct {
 
 type Product struct {
 	ID            uint       `gorm:"primaryKey" json:"id"`
+	UserID        uint       `gorm:"index" json:"user_id"`
 	ProductID     string     `gorm:"not null" json:"product_id"`
 	Store         string     `gorm:"not null" json:"store"`
 	URL           string     `gorm:"not null" json:"url"`
@@ -17,6 +25,15 @@ type Product struct {
 	Status        string     `gorm:"default:'PENDING'" json:"status"`
 	LastScrapedAt *time.Time `json:"last_scraped_at"`
 	CreatedAt     time.Time  `json:"created_at"`
+}
+
+type ScrapeLog struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	ProductID string    `gorm:"index;not null" json:"product_id"`
+	Store     string    `json:"store"`
+	Message   string    `json:"message"`
+	Level     string    `json:"level"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type TaskResponse struct {

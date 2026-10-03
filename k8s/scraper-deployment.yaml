@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: omni-scraper-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: omni-scraper-worker
+  template:
+    metadata:
+      labels:
+        app: omni-scraper-worker
+    spec:
+      containers:
+      - name: scraper
+        image: thitipongroo/omni-scraper:latest
+        env:
+        - name: REDIS_URL
+          value: "redis://redis-master:6379"
+        - name: GO_API_URL
+          value: "http://omni-go-api:3000"
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: scraper-scaler
+spec:
+  scaleTargetRef:
+    name: omni-scraper-worker
+  minReplicaCount: 1
+  maxReplicaCount: 50
+  triggers:
+  - type: redis
+    metadata:
+      address: redis-master:6379
+      listName: scraper_tasks
+      listLength: "10" # Scale up for every 10 tasks in queue

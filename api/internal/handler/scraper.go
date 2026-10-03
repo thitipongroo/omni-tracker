@@ -65,6 +65,11 @@ func PostPrice(cfg *config.Config) fiber.Handler {
 			var lastPrice float64
 			_, _ = fmt.Sscanf(lastPriceStr, "%f", &lastPrice)
 
+			if p.Price < lastPrice*0.2 && p.Price > 0 {
+				repository.DB.Model(&models.Product{}).Where("product_id = ? AND store = ?", p.ProductID, p.Store).Update("status", "ANOMALY")
+				return c.SendStatus(200) // Skip saving this weird data
+			}
+
 			if service.EvaluatePriceDrop(lastPrice, p.Price) {
 				msg := fmt.Sprintf("🚨 Price Drop Alert!\n%s at %s dropped from %.2f to %.2f THB\nLink: %s",
 					p.ProductID, p.Store, lastPrice, p.Price, p.URL)
@@ -106,3 +111,29 @@ func UpdateConfig(c *fiber.Ctx) error {
 	}
 	return c.JSON(cfg)
 }
+
+func PostLog(c *fiber.Ctx) error {
+	logEntry := new(models.ScrapeLog)
+	if err := c.BodyParser(logEntry); err != nil {
+		return c.SendStatus(400)
+	}
+	logEntry.CreatedAt = time.Now()
+	repository.DB.Create(logEntry)
+	return c.SendStatus(200)
+}
+
+func GetLogs(c *fiber.Ctx) error {
+	var logs []models.ScrapeLog
+	
+	if userID, ok := c.Locals("userID").(uint); ok {
+		var productIDs []string
+		repository.DB.Model(&models.Product{}).Where("user_id = ?", userID).Pluck("product_id", &productIDs)
+		
+		if len(productIDs) > 0 {
+			repository.DB.Where("product_id IN ?", productIDs).Order("created_at desc").Limit(100).Find(&logs)
+		}
+	}
+	
+	return c.JSON(logs)
+}
+

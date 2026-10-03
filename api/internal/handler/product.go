@@ -9,8 +9,13 @@ import (
 )
 
 func GetProducts(c *fiber.Ctx) error {
+	userID, ok := c.Locals("userID").(uint)
 	var products []models.Product
-	repository.DB.Order("id desc").Find(&products)
+	if ok {
+		repository.DB.Where("user_id = ?", userID).Order("id desc").Find(&products)
+	} else {
+		repository.DB.Order("id desc").Find(&products) // For Admin/Service
+	}
 	return c.JSON(products)
 }
 
@@ -19,13 +24,20 @@ func AddProduct(c *fiber.Ctx) error {
 	if err := c.BodyParser(p); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "invalid payload"})
 	}
+	if userID, ok := c.Locals("userID").(uint); ok {
+		p.UserID = userID
+	}
 	p.Status = "PENDING"
 	repository.DB.Create(p)
 	return c.JSON(p)
 }
 
 func DeleteProduct(c *fiber.Ctx) error {
-	repository.DB.Delete(&models.Product{}, c.Params("id"))
+	if userID, ok := c.Locals("userID").(uint); ok {
+		repository.DB.Where("id = ? AND user_id = ?", c.Params("id"), userID).Delete(&models.Product{})
+	} else {
+		repository.DB.Delete(&models.Product{}, c.Params("id"))
+	}
 	return c.SendStatus(200)
 }
 

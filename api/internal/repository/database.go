@@ -24,7 +24,7 @@ func InitDB(dsn string) {
 	if err != nil {
 		log.Fatal("Failed to connect to DB:", err)
 	}
-	if err := DB.AutoMigrate(&models.Product{}, &models.StoreConfig{}); err != nil {
+	if err := DB.AutoMigrate(&models.User{}, &models.Product{}, &models.StoreConfig{}, &models.ScrapeLog{}); err != nil {
 		log.Printf("Warning: AutoMigrate failed: %v", err)
 	}
 
@@ -37,5 +37,11 @@ func seedDefaults() {
 	if count == 0 {
 		DB.Create(&models.StoreConfig{Store: "shopee", Selector: ".product-price"})
 		DB.Create(&models.StoreConfig{Store: "lazada", Selector: ".pdp-price"})
+	}
+	
+	var userCount int64
+	DB.Model(&models.User{}).Count(&userCount)
+	if userCount == 0 {
+		DB.Create(&models.User{Username: "admin", Password: "password123", Role: "admin"})
 	}
 }

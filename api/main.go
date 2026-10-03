@@ -47,6 +47,8 @@ func main() {
 	protected.Get("/tasks", handler.GetTasks)
 	protected.Patch("/products/:id/status", handler.UpdateStatus)
 	protected.Post("/prices", handler.PostPrice(cfg))
+	protected.Get("/logs", handler.GetLogs)
+	protected.Post("/logs", handler.PostLog)
 
 	// Start internal background cron to push tasks to Message Queue
 	service.StartTaskScheduler()
