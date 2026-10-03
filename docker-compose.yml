@@ -1,6 +1,22 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: omnitracker
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
   influxdb:
     image: influxdb:2.7
     ports:
@@ -16,12 +32,16 @@ services:
       - influxdb-data:/var/lib/influxdb2
 
   go-api:
-    build: ./api
+    build: 
+      context: .
+      dockerfile: api/Dockerfile
     ports:
       - "3000:3000"
     env_file:
       - .env
     depends_on:
+      - postgres
+      - redis
       - influxdb
 
   scraper-worker:
@@ -30,8 +50,8 @@ services:
       - .env
     depends_on:
       - go-api
-    # Restarts automatically if it crashes
-    restart: on-failure
+    restart: always
 
 volumes:
+  postgres-data:
   influxdb-data:

@@ -1,21 +1,25 @@
-# 🚀 High-Speed Price & Market Intelligence Platform
+# 🚀 Omni-Tracker: Market Intelligence Platform (v2.0)
 
 [![Go](https://img.shields.io/badge/Go-00ADD8?style=flat&logo=go&logoColor=white)](https://go.dev/)
+[![Node.js](https://img.shields.io/badge/Node.js-339933?style=flat&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![Playwright](https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white)](https://playwright.dev/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=flat&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat&logo=redis&logoColor=white)](https://redis.io/)
 [![InfluxDB](https://img.shields.io/badge/InfluxDB-22ADF6?style=flat&logo=influxdb&logoColor=white)](https://www.influxdata.com/)
 [![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)](https://www.docker.com/)
-[![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=flat&logo=github-actions&logoColor=white)](https://github.com/features/actions)
 
-**Omni-Tracker** is a distributed, high-concurrency market intelligence platform. It treats web scrapers as "IoT sensors" that ingest thousands of data points (prices, stock statuses) concurrently into a Golang-based API, storing the metrics in a time-series database for trend analysis and real-time alerts.
+**Omni-Tracker** is a distributed, high-concurrency market intelligence platform. It treats web scrapers as "IoT sensors" that ingest thousands of data points concurrently. Version 2.0 introduces a robust microservices architecture featuring a centralized Database, Caching layer, and a beautiful Web Dashboard.
 
-## ✨ Features
+## ✨ Features (v2.0)
 
-- **High-Concurrency Ingestion:** Built with Go Fiber to handle massive traffic spikes from parallel scraping workers without bottlenecking.
-- **Time-Series Storage:** Utilizes InfluxDB for optimized storage and querying of historical price changes and market trends.
-- **Headless Browser Automation:** Leverages Playwright to bypass modern e-commerce anti-bot protections and extract dynamic data.
-- **Event-Driven Alerts:** Evaluates price drops in real-time and triggers notifications via the LINE Messaging API.
-- **Fully Containerized:** The entire ecosystem (Go API, Node.js Scrapers, InfluxDB) is orchestrated via Docker Compose.
-- **Automated CI/CD:** GitHub Actions pipeline for linting, testing, and building Docker images on every push.
+- **High-Concurrency Ingestion:** Built with Go Fiber to handle massive traffic spikes.
+- **Relational Task Management:** Uses **PostgreSQL + GORM** to dynamically manage and distribute scraping tasks via REST API.
+- **Ultra-Fast Alerting Engine:** Utilizes **Redis** as an in-memory cache to evaluate price drops in milliseconds, drastically reducing read-load on the primary time-series DB.
+- **Time-Series Storage:** Stores historical price trends and fluctuations in **InfluxDB** for deep analytics.
+- **Advanced Headless Scraping:** Leverages **Playwright + Stealth Plugin** to bypass modern e-commerce anti-bot protections.
+- **Smart Concurrency & Looping:** Node.js worker automatically loops via `node-cron` and processes tasks in concurrent chunks using `Promise.all`.
+- **Glassmorphism Dashboard:** A stunning Vanilla HTML/CSS/JS frontend to manage tracked products and view active scraping tasks.
+- **Event-Driven Alerts:** Real-time notifications via LINE Messaging API when prices drop.
 
 ---
 
@@ -23,39 +27,37 @@
 
 ```mermaid
 flowchart LR
-    subgraph Automation [Automation]
-        CI[GitHub Actions]
-        CRON[Job Scheduler]
+    subgraph Frontend [UI Layer]
+        DASH[Web Dashboard]
     end
 
-    subgraph Scrapers [Scraper Fleet]
-        S1[Worker 1]
-        S2[Worker 2]
+    subgraph Scrapers [Scraper Fleet (Node.js)]
+        S1[Playwright Worker]
     end
 
-    subgraph Core [Core Platform]
-        GO["Go Fiber API\nHigh Concurrency"]
-        DB[("InfluxDB\nTime-Series")]
-        ALERT[Alert Engine]
+    subgraph Core [Core API (Go Fiber)]
+        GO["API Gateway\n& Alert Engine"]
+    end
+    
+    subgraph Data [Data Layer]
+        PG[(PostgreSQL\nTasks/Config)]
+        REDIS[(Redis\nPrice Cache)]
+        INFLUX[(InfluxDB\nTime-Series)]
     end
     
     subgraph External [External Services]
-        LINE[LINE Bot API]
-        ECOM1[Shopee]
-        ECOM2[Lazada]
+        LINE[LINE Notify]
+        ECOM1[Shopee / Lazada]
     end
 
-    CRON -->|Every 1 hour| S1
-    CRON -->|Every 1 hour| S2
-    S1 -->|Scrape| ECOM1
-    S1 -->|POST /api/prices| GO
-    S2 -->|Scrape| ECOM2
-    S2 -->|POST /api/prices| GO
-    GO -->|Batch Write| DB
-    ALERT -->|Query Trends| DB
-    ALERT -->|Webhook| LINE
-    CI -.->|Build & Push| GO
-    CI -.->|Build & Push| S1
+    DASH <-->|REST API| GO
+    S1 -->|Fetch Tasks| GO
+    GO <-->|Query/Update| PG
+    S1 -->|Scrape Data| ECOM1
+    S1 -->|POST /prices| GO
+    GO <-->|Check Last Price| REDIS
+    GO -->|Async Write| INFLUX
+    GO -->|Webhook (If dropped)| LINE
 ```
 
 ---
@@ -64,8 +66,7 @@ flowchart LR
 
 ### Prerequisites
 - Docker & Docker Compose
-- Go 1.21+
-- Node.js 18+
+- LINE Notify Token (Optional, for alerts)
 
 ### Installation & Run
 
@@ -75,16 +76,17 @@ flowchart LR
    cd omni-tracker
    ```
 
-2. **Start the ecosystem via Docker:**
+2. **Configure Environment Variables:**
+   Edit the `.env` file and insert your `LINE_NOTIFY_TOKEN` (or leave it blank to disable alerts).
+
+3. **Start the ecosystem via Docker:**
    ```bash
    docker-compose up -d --build
    ```
-   *This command spins up the InfluxDB instance, the Golang API on port 3000, and the Playwright scraper workers.*
+   *This command spins up PostgreSQL, Redis, InfluxDB, the Golang API, and the Scraper Worker.*
 
-3. **Verify the API is running:**
-   ```bash
-   curl http://localhost:3000/health
-   ```
+4. **Access the Dashboard:**
+   Open your browser and navigate to: [http://localhost:3000](http://localhost:3000)
 
 ---
 
@@ -94,15 +96,21 @@ flowchart LR
 omni-tracker/
 ├── .github/workflows/
 │   └── ci.yml               # GitHub Actions CI/CD Pipeline
-├── api/                     # Golang Backend
-│   ├── main.go              # Go Ingestion API & Alert Engine
+├── api/                     # Golang Backend (Fiber, GORM, Redis, InfluxDB)
+│   ├── Dockerfile
 │   ├── go.mod
-│   └── Dockerfile
-├── scraper/                 # Playwright Scraper
-│   ├── index.js             # Node.js scraping logic
-│   ├── package.json
-│   └── Dockerfile
-└── docker-compose.yml       # Orchestrates Go, Node, and InfluxDB
+│   └── main.go
+├── dashboard/               # Frontend UI (Vanilla HTML/CSS/JS)
+│   ├── index.html
+│   ├── style.css
+│   └── app.js
+├── scraper/                 # Node.js Scraper (Playwright, Stealth, Cron)
+│   ├── Dockerfile
+│   ├── index.js
+│   └── package.json
+├── docker-compose.yml       # Orchestrates the entire microservice stack
+├── .env                     # Configuration and secrets
+└── .gitignore               # Ignored files
 ```
 
 ---

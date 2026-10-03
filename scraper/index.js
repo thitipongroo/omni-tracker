@@ -2,12 +2,13 @@ require('dotenv').config();
 const { chromium } = require('playwright-extra');
 const stealth = require('puppeteer-extra-plugin-stealth')();
 const axios = require('axios');
+const cron = require('node-cron');
 
-// Add stealth plugin to evade anti-bot detections
 chromium.use(stealth);
 
 const API_URL = process.env.GO_API_URL || 'http://go-api:3000';
 const API_KEY = process.env.API_KEY || 'my-internal-secret-key';
+const CONCURRENCY_LIMIT = 3; // Maximum tabs to open simultaneously
 
 async function fetchTasks() {
     try {
@@ -16,95 +17,68 @@ async function fetchTasks() {
         });
         return response.data;
     } catch (error) {
-        console.error('❌ Failed to fetch tasks from Go API:', error.message);
+        console.error('❌ Failed to fetch tasks:', error.message);
         return [];
     }
 }
 
-async function scrapePrice(page, task) {
+async function scrapePrice(context, task) {
+    const page = await context.newPage();
     try {
-        console.log(`🔍 Scraping ${task.product_id} at ${task.store}...`);
+        console.log(`🔍 [${task.product_id}] Scraping at ${task.store}...`);
         await page.goto(task.url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-        
-        // Polite delay to let JS execution and network requests settle
-        await page.waitForTimeout(3000); 
+        await page.waitForTimeout(3000); // Polite delay for rendering
 
-        let priceValue = 0;
-        
-        // -------------------------------------------------------------------
-        // TODO: In a real scenario, use specific selectors per store.
-        // Example: 
-        // if (task.store === 'shopee') { ... }
-        // const priceText = await page.locator('.product-price').first().innerText();
-        // priceValue = parseFloat(priceText.replace(/[^0-9.-]+/g, ""));
-        // -------------------------------------------------------------------
+        // Simulated extraction (Needs real selectors)
+        const priceValue = Math.floor(Math.random() * (15000 - 10000 + 1)) + 10000;
+        console.log(`📦 [${task.product_id}] Found Price: ${priceValue} THB`);
 
-        // For demonstration, we simulate finding a dynamic price
-        // Randomize price slightly to simulate price drops and trigger alerts
-        priceValue = Math.floor(Math.random() * (15000 - 10000 + 1)) + 10000;
-        
-        console.log(`📦 Found Price for ${task.product_id}: ${priceValue} THB`);
-        return priceValue;
-
-    } catch (error) {
-        console.error(`❌ Scraping failed for ${task.product_id}:`, error.message);
-        return null;
-    }
-}
-
-async function submitPrice(task, price) {
-    try {
-        const payload = {
+        await axios.post(`${API_URL}/api/prices`, {
             product_id: task.product_id,
             store: task.store,
-            price: price,
+            price: priceValue,
             url: task.url
-        };
-        
-        await axios.post(`${API_URL}/api/prices`, payload, {
+        }, {
             headers: { 'Authorization': `Bearer ${API_KEY}` }
         });
-        console.log(`✅ Sent to Ingestion API: ${task.product_id}`);
+        
     } catch (error) {
-        console.error(`❌ Failed to submit price for ${task.product_id}:`, error.message);
+        console.error(`❌ [${task.product_id}] Scraping failed:`, error.message);
+    } finally {
+        await page.close(); // Free RAM
     }
 }
 
-(async () => {
-    console.log('🚀 Starting E-commerce Scraper with Stealth Mode...');
-    
-    // 1. Fetch dynamic tasks from the Queue/API
+async function runScraperCycle() {
+    console.log(`\n⏰ [${new Date().toISOString()}] Starting Scraper Cycle...`);
     const tasks = await fetchTasks();
     if (!tasks || tasks.length === 0) {
-        console.log('💤 No tasks to process. Exiting.');
+        console.log('💤 No active tasks.');
         return;
     }
 
-    // 2. Launch Stealth Browser
-    const browser = await chromium.launch({ 
-        headless: true,
-        // Optional: Add proxy support here
-        // args: ['--proxy-server=http://your-proxy-here:port'] 
-    });
-    
-    // Set a realistic User-Agent
+    const browser = await chromium.launch({ headless: true });
     const context = await browser.newContext({
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     });
-    
-    const page = await context.newPage();
 
-    // 3. Iterate and process tasks
-    for (const task of tasks) {
-        const price = await scrapePrice(page, task);
-        if (price !== null) {
-            await submitPrice(task, price);
-        }
-        
-        // Polite delay between requests to avoid rate-limiting
-        await page.waitForTimeout(2000);
+    // Concurrency Chunking
+    for (let i = 0; i < tasks.length; i += CONCURRENCY_LIMIT) {
+        const batch = tasks.slice(i, i + CONCURRENCY_LIMIT);
+        console.log(`🚀 Processing batch ${Math.floor(i/CONCURRENCY_LIMIT) + 1}...`);
+        await Promise.all(batch.map(task => scrapePrice(context, task)));
     }
 
     await browser.close();
-    console.log('🏁 Scraping finished.');
-})();
+    console.log('🏁 Scraper Cycle Finished.');
+}
+
+// 1. Run immediately on container start
+runScraperCycle();
+
+// 2. Schedule continuous loop (runs every 10 minutes)
+cron.schedule('*/10 * * * *', () => {
+    runScraperCycle();
+});
+
+console.log('⏳ Scraper Service initialized. Waiting for jobs...');

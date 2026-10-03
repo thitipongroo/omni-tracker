@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Omni-Tracker Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="background-orbs">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+    </div>
+    
+    <div class="container glass-panel">
+        <header>
+            <h1>Omni-Tracker <span>Intelligence</span></h1>
+            <p>Real-time Market Monitoring Platform</p>
+        </header>
+
+        <section class="add-product-section">
+            <h2>Track New Product</h2>
+            <form id="addProductForm">
+                <input type="text" id="productId" placeholder="Product ID (e.g. iphone-15)" required>
+                <select id="store" required>
+                    <option value="shopee">Shopee</option>
+                    <option value="lazada">Lazada</option>
+                    <option value="amazon">Amazon</option>
+                </select>
+                <input type="url" id="productUrl" placeholder="Product URL" required>
+                <button type="submit" class="btn-primary">Add Task</button>
+            </form>
+        </section>
+
+        <section class="tracked-products-section">
+            <h2>Active Scrape Tasks</h2>
+            <div class="table-container">
+                <table id="productsTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Product ID</th>
+                            <th>Store</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="productsList">
+                        <!-- Loaded dynamically -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
