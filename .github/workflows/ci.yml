@@ -19,7 +19,9 @@ jobs:
         
     - name: Run Go Tests
       working-directory: ./api
-      run: go test ./...
+      run: |
+        go mod tidy
+        go test ./...
       
     - name: Build Go Docker Image
       run: docker build -t thitipongroo/omni-go-api:latest ./api
