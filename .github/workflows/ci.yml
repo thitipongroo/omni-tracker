@@ -15,7 +15,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.21'
+        go-version: '1.25.0'
         
     - name: Run Go Tests
       working-directory: ./api
@@ -24,7 +24,7 @@ jobs:
         go test ./...
       
     - name: Build Go Docker Image
-      run: docker build -t thitipongroo/omni-go-api:latest ./api
+      run: docker build -f api/Dockerfile -t thitipongroo/omni-go-api:latest .
 
   test-and-build-scraper:
     runs-on: ubuntu-latest

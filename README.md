@@ -1,4 +1,4 @@
-# 🚀 Omni-Tracker: Market Intelligence Platform (v2.0)
+# 🚀 Omni-Tracker: Market Intelligence Platform
 
 [![Go](https://img.shields.io/badge/Go-00ADD8?style=flat&logo=go&logoColor=white)](https://go.dev/)
 [![Node.js](https://img.shields.io/badge/Node.js-339933?style=flat&logo=node.js&logoColor=white)](https://nodejs.org/)
@@ -11,7 +11,7 @@
 
 **Omni-Tracker** is a distributed, high-concurrency market intelligence platform. It treats web scrapers as "IoT sensors" that ingest thousands of data points concurrently. Version 2.0 introduces a robust microservices architecture featuring a centralized Database, Caching layer, and a beautiful Web Dashboard.
 
-## ✨ Features (v2.0)
+## ✨ Features
 
 - **High-Concurrency Ingestion:** Built with Go Fiber to handle massive traffic spikes.
 - **Relational Task Management:** Uses **PostgreSQL + GORM** to dynamically manage and distribute scraping tasks via REST API.
