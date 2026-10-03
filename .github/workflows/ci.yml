@@ -20,7 +20,7 @@ jobs:
         
     - name: Prepare Go Modules
       working-directory: ./api
-      run: go mod tidy
+      run: GOTOOLCHAIN=local go mod tidy
 
     - name: Run golangci-lint
       uses: golangci/golangci-lint-action@v6
