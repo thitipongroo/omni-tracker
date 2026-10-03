@@ -25,5 +25,5 @@ func SendLineAlert(token, message string) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Authorization", "Bearer "+token)
 	client := &http.Client{Timeout: 10 * time.Second}
-	client.Do(req)
+	_, _ = client.Do(req)
 }

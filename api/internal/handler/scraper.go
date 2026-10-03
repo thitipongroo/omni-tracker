@@ -52,7 +52,9 @@ func UpdateStatus(c *fiber.Ctx) error {
 func PostPrice(cfg *config.Config) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		p := new(models.PricePayload)
-		c.BodyParser(p)
+		if err := c.BodyParser(p); err != nil {
+			return c.SendStatus(400)
+		}
 
 		cacheKey := fmt.Sprintf("price:%s:%s", p.Store, p.ProductID)
 		lastPriceStr, err := repository.RDB.Get(repository.Ctx, cacheKey).Result()
@@ -61,7 +63,7 @@ func PostPrice(cfg *config.Config) fiber.Handler {
 			repository.RDB.Set(repository.Ctx, cacheKey, p.Price, 0)
 		} else if err == nil {
 			var lastPrice float64
-			fmt.Sscanf(lastPriceStr, "%f", &lastPrice)
+			_, _ = fmt.Sscanf(lastPriceStr, "%f", &lastPrice)
 
 			if service.EvaluatePriceDrop(lastPrice, p.Price) {
 				msg := fmt.Sprintf("🚨 Price Drop Alert!\n%s at %s dropped from %.2f to %.2f THB\nLink: %s",
@@ -92,7 +94,9 @@ func GetConfigs(c *fiber.Ctx) error {
 
 func UpdateConfig(c *fiber.Ctx) error {
 	cfg := new(models.StoreConfig)
-	c.BodyParser(cfg)
+	if err := c.BodyParser(cfg); err != nil {
+		return c.SendStatus(400)
+	}
 	var existing models.StoreConfig
 	if res := repository.DB.Where("store = ?", cfg.Store).First(&existing); res.Error == nil {
 		existing.Selector = cfg.Selector

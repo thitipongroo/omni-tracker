@@ -24,7 +24,9 @@ func InitDB(dsn string) {
 	if err != nil {
 		log.Fatal("Failed to connect to DB:", err)
 	}
-	DB.AutoMigrate(&models.Product{}, &models.StoreConfig{})
+	if err := DB.AutoMigrate(&models.Product{}, &models.StoreConfig{}); err != nil {
+		log.Printf("Warning: AutoMigrate failed: %v", err)
+	}
 
 	seedDefaults()
 }
