@@ -29,7 +29,6 @@ jobs:
     - name: Run Go Tests
       working-directory: ./api
       run: |
-        go mod tidy
         go test ./...
       
     - name: Build Go Docker Image
