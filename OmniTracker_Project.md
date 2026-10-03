@@ -12,7 +12,7 @@ Everything is containerized with **Docker** and deployed via **GitHub Actions**.
 ## 🏗️ Architecture
 
 ```mermaid
-flowchart TD
+flowchart LR
     subgraph GitHub Actions [CI/CD]
         CI[Automated Tests & Docker Build]
         CRON[Cron Job Trigger]

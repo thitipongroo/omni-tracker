@@ -27,20 +27,20 @@ flowchart LR
         CI[GitHub Actions]
     end
 
-    subgraph Scrapers [Scraper Fleet - Node.js and Playwright]
-        S1[Scraper Worker 1]
-        S2[Scraper Worker 2]
+    subgraph Scrapers [Scraper Fleet - Node.js + Playwright]
+        S1[Worker 1]
+        S2[Worker 2]
     end
 
-    subgraph Core [Core Platform - Golang and InfluxDB]
-        GO["Go Fiber API (High Concurrency)"]
-        DB[("InfluxDB (Time-Series)")]
+    subgraph Core [Core Platform - Golang + InfluxDB]
+        GO["Go Fiber API High Concurrency"]
+        DB[("InfluxDB Time-Series")]
         ALERT[Alert Engine]
     end
     
     subgraph External [External Services]
         LINE[LINE Bot API]
-        ECOM[Shopee / Lazada]
+        ECOM[Shopee/Lazada]
     end
 
     S1 -->|Scrape| ECOM
