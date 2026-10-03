@@ -2,10 +2,8 @@
 FROM golang:1.21-alpine AS builder
 WORKDIR /app
 COPY go.mod ./
-# (ถ้ามี go.sum ให้เอาคอมเมนต์บรรทัดล่างออก)
-# COPY go.sum ./ 
-RUN go mod download
 COPY main.go ./
+RUN go mod tidy
 RUN go build -o main .
 
 # Stage 2: Run
