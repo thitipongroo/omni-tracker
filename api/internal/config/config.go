@@ -13,6 +13,7 @@ type Config struct {
 	DatabaseURL  string
 	RedisURL     string
 	APIPort      string
+	JWTSecret    string
 }
 
 func LoadConfig() *Config {
@@ -27,6 +28,7 @@ func LoadConfig() *Config {
 		DatabaseURL:  getEnv("DATABASE_URL", "host=postgres user=admin password=admin dbname=omnitracker port=5432 sslmode=disable"),
 		RedisURL:     getEnv("REDIS_URL", "redis:6379"),
 		APIPort:      getEnv("API_PORT", "3000"),
+		JWTSecret:    getEnv("JWT_SECRET", "default-fallback-secret-key-1234"),
 	}
 }
 
