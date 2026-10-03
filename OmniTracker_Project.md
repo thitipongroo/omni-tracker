@@ -36,8 +36,8 @@ flowchart TD
 
     CRON -->|Triggers every hour| S1
     S1 -->|Scrapes| ECOM
-    S1 -->|POST /api/prices (JSON)| GO
-    S2 -->|POST /api/prices (JSON)| GO
+    S1 -->|POST /api/prices| GO
+    S2 -->|POST /api/prices| GO
     GO -->|Batch Write| DB
     ALERT -->|Query Trends| DB
     ALERT -->|Trigger Notify| LINE
