@@ -57,7 +57,7 @@ flowchart LR
     S1 -->|POST /prices| GO
     GO <-->|Check Last Price| REDIS
     GO -->|Async Write| INFLUX
-    GO -->|Webhook (If dropped)| LINE
+    GO -->|Webhook| LINE
 ```
 
 ---
