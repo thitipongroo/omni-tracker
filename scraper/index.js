@@ -11,9 +11,10 @@ const API_KEY = process.env.API_KEY || 'my-internal-secret-key';
 let redisUrl = process.env.REDIS_URL || 'redis:6379';
 if (!redisUrl.startsWith('redis://')) redisUrl = 'redis://' + redisUrl;
 const CONCURRENCY_LIMIT = 3;
-const PROXY_URL = process.env.PROXY_URL; 
 
-// Random User-Agent Pool to evade fingerprinting
+// Proxy Rotation Pool (Comma-separated from .env)
+const PROXY_URLS = (process.env.PROXY_URL || '').split(',').map(p => p.trim()).filter(p => p);
+
 const USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
@@ -34,13 +35,9 @@ async function reportStatus(taskId, status) {
     }
 }
 
-// Human-like Interaction Simulator
 async function simulateHumanBehavior(page) {
-    // Random Mouse Movements
     const width = 1920, height = 1080;
     await page.mouse.move(Math.random() * width, Math.random() * height, { steps: 10 });
-    
-    // Random Scrolling to trigger lazy loading / evade bot detection
     await page.evaluate(() => window.scrollBy({ top: 500 + Math.random() * 500, behavior: 'smooth' }));
     await page.waitForTimeout(1000 + Math.random() * 1000);
     await page.evaluate(() => window.scrollBy({ top: -300 - Math.random() * 300, behavior: 'smooth' }));
@@ -55,15 +52,15 @@ async function processTask(browser, task) {
         ignoreHTTPSErrors: true
     };
     
-    if (PROXY_URL) {
-        contextOptions.proxy = { server: PROXY_URL };
-        console.log(`🛡️ Using Proxy for task ${task.product_id}`);
+    if (PROXY_URLS.length > 0) {
+        const randomProxy = PROXY_URLS[Math.floor(Math.random() * PROXY_URLS.length)];
+        contextOptions.proxy = { server: randomProxy };
+        console.log(`🛡️ Assigned Rotating Proxy: ${randomProxy}`);
     }
 
     const context = await browser.newContext(contextOptions);
     const page = await context.newPage();
 
-    // Erase webdriver flags natively
     await page.addInitScript(() => {
         Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
         window.chrome = { runtime: {} };
@@ -71,29 +68,62 @@ async function processTask(browser, task) {
 
     try {
         console.log(`🔍 [${task.product_id}] Scraping at ${task.store}...`);
+        
+        let interceptedPrice = null;
+
+        // XHR/Fetch API Interception for Shopee and Lazada
+        page.on('response', async (response) => {
+            const url = response.url();
+            if (url.includes('/api/v4/item/get') && response.status() === 200) {
+                try {
+                    const json = await response.json();
+                    if (json?.data?.price) {
+                        interceptedPrice = json.data.price / 100000;
+                    }
+                } catch (e) {
+                    // Ignore parsing errors for partial responses
+                }
+            }
+            if (url.includes('lazada') && url.includes('/pdp/data') && response.status() === 200) {
+                try {
+                    const json = await response.json();
+                    if (json?.module?.price?.salePrice?.value) {
+                        interceptedPrice = parseFloat(json.module.price.salePrice.value);
+                    }
+                } catch (e) {
+                    // Ignore parsing errors
+                }
+            }
+        });
+
         await page.goto(task.url, { waitUntil: 'domcontentloaded', timeout: 45000 });
         
-        // Evasion tactics
-        await page.waitForTimeout(2000 + Math.random() * 2000); 
+        // Wait and simulate human behavior to ensure API calls are fired
+        await page.waitForTimeout(3000 + Math.random() * 2000); 
         await simulateHumanBehavior(page);
+        await page.waitForTimeout(2000); // Wait for potential delayed API responses
 
         let priceValue = 0;
-        if (task.selector) {
+        
+        if (interceptedPrice !== null) {
+            priceValue = interceptedPrice;
+            console.log(`📡 [${task.product_id}] XHR Intercept Success! Price: ${priceValue} THB`);
+        } else if (task.selector) {
+            // Fallback to DOM parsing
             try {
                 const locator = page.locator(task.selector).first();
-                await locator.waitFor({ state: 'visible', timeout: 10000 });
+                await locator.waitFor({ state: 'visible', timeout: 5000 });
                 const priceText = await locator.innerText();
                 priceValue = parseFloat(priceText.replace(/[^0-9.-]+/g, ""));
                 if (isNaN(priceValue)) priceValue = 0;
+                console.log(`📦 [${task.product_id}] DOM Parse Success! Price: ${priceValue} THB`);
             } catch (err) {
-                console.log(`⚠️ Selector '${task.selector}' not found or Captcha blocked. Using fallback.`);
+                console.log(`⚠️ API Intercept & Selector '${task.selector}' failed. Using fallback.`);
                 priceValue = Math.floor(Math.random() * (15000 - 10000 + 1)) + 10000;
             }
         } else {
             priceValue = Math.floor(Math.random() * (15000 - 10000 + 1)) + 10000;
         }
-        
-        console.log(`📦 [${task.product_id}] Found Price: ${priceValue} THB`);
 
         await axios.post(`${API_URL}/api/prices`, {
             product_id: task.product_id,
@@ -133,7 +163,7 @@ async function workerLoop(workerId, browser) {
 }
 
 async function initScraperFleet() {
-    console.log('🚀 Initializing Evasive Scraper Fleet...');
+    console.log('🚀 Initializing Evasive Scraper Fleet with Proxy Rotation & API Intercept...');
     const browser = await chromium.launch({ headless: true });
     
     for (let i = 1; i <= CONCURRENCY_LIMIT; i++) {

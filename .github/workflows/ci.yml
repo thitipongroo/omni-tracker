@@ -17,6 +17,13 @@ jobs:
       with:
         go-version: '1.25.0'
         
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@v3
+      with:
+        version: latest
+        working-directory: api
+        args: --timeout=5m
+        
     - name: Run Go Tests
       working-directory: ./api
       run: |
@@ -35,6 +42,16 @@ jobs:
       uses: actions/setup-node@v3
       with:
         node-version: '22'
+        
+    - name: Install Scraper Dependencies
+      working-directory: ./scraper
+      run: npm install
+      
+    - name: Run ESLint
+      working-directory: ./scraper
+      run: |
+        npm install eslint --save-dev
+        npx eslint index.js
         
     - name: Build Playwright Docker Image
       run: docker build -t thitipongroo/omni-scraper:latest ./scraper
