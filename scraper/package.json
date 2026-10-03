@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "High-Speed Playwright Scraper with Stealth",
   "main": "index.js",
+  "type": "module",
   "scripts": {
     "start": "node index.js"
   },

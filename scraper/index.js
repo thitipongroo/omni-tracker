@@ -1,8 +1,10 @@
-require('dotenv').config();
-const { chromium } = require('playwright-extra');
-const stealth = require('puppeteer-extra-plugin-stealth')();
-const axios = require('axios');
-const Redis = require('ioredis');
+import 'dotenv/config';
+import { chromium } from 'playwright-extra';
+import stealthPlugin from 'puppeteer-extra-plugin-stealth';
+import axios from 'axios';
+import Redis from 'ioredis';
+
+const stealth = stealthPlugin();
 
 chromium.use(stealth);
 
