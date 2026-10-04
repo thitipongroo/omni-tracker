@@ -29,6 +29,7 @@
   - **Environment Variable Enforcement** ensuring critical secrets are strictly configured.
 - **Advanced Headless Scraping:** Leverages **Playwright + Stealth Plugin** to bypass modern e-commerce anti-bot protections. NetworkIdle-based synchronization maximizes throughput.
 - **Event-Driven Alerts:** Real-time notifications via LINE Messaging API when prices drop.
+- **Agentic AI (Market Analyst):** A Python microservice that fetches weekly pricing data from InfluxDB and uses **Gemini AI** to provide smart analysis and personalized recommendations directly via LINE Notify.
 - **Automated CI/CD:** GitHub Actions pipeline for linting, testing, and building Docker images.
 
 ---
@@ -108,6 +109,19 @@ flowchart LR
    Open your browser and navigate to: [http://localhost:3000](http://localhost:3000)
    *(Default Login Credentials - Username: `admin` / Password: `password123`)*
 
+### 🤖 Running the AI Market Analyst (Agentic AI)
+
+1. Ensure you have added both `LINE_NOTIFY_TOKEN` and `GEMINI_API_KEY` in your `.env` file.
+2. Install the required Python dependencies:
+   ```bash
+   cd analyst
+   pip install -r requirements.txt
+   ```
+3. Run the AI script to fetch data, generate insights, and send a Smart Alert to LINE:
+   ```bash
+   python market_analyst.py
+   ```
+
 ---
 
 ## 📁 Project Structure
@@ -133,6 +147,9 @@ omni-tracker/
 │   ├── Dockerfile
 │   ├── index.js             # Message Queue Consumers (Workers)
 │   └── package.json
+├── analyst/                 # Agentic AI Microservice (Python + Gemini)
+│   ├── market_analyst.py    # AI Market Analyst Script
+│   └── requirements.txt
 ├── docker-compose.yml       # Orchestrates the microservice stack
 ├── .env                     # Configuration and secrets
 └── .gitignore               # Ignored files
