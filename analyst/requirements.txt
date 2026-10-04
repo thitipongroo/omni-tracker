@@ -5,4 +5,7 @@ psycopg2-binary
 influxdb-client
 google-generativeai
 requests
+httpx
 pydantic
+duckduckgo-search
+tenacity
