@@ -2,19 +2,19 @@ import os
 import json
 import asyncio
 import httpx
-import psycopg2
+import asyncpg
 from fastapi import FastAPI, BackgroundTasks
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import google.generativeai as genai
 from pydantic import BaseModel, Field
-from influxdb_client import InfluxDBClient
+from influxdb_client.client.influxdb_client_async import InfluxDBClientAsync
 from datetime import datetime
-from duckduckgo_search import DDGS
+from duckduckgo_search import AsyncDDGS
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 # Environment variables
-DB_URL = os.getenv("DATABASE_URL", "host=postgres user=admin password=admin dbname=omnitracker port=5432 sslmode=disable")
+DB_URL = os.getenv("DATABASE_URL", "postgres://admin:admin@postgres:5432/omnitracker")
 INFLUX_URL = os.getenv("INFLUXDB_URL", "http://influxdb:8086")
 INFLUX_TOKEN = os.getenv("INFLUXDB_TOKEN", "super-secret-token")
 INFLUX_ORG = os.getenv("INFLUXDB_ORG", "my-org")
@@ -33,91 +33,103 @@ class AIResponse(BaseModel):
     confidence_score: int
     reasoning: str
 
-# 5. AI Memory/State (PostgreSQL)
-def init_db():
-    """Create table for AI memory if it doesn't exist."""
-    try:
-        conn = psycopg2.connect(DB_URL)
-        cur = conn.cursor()
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS ai_recommendations_log (
-                id SERIAL PRIMARY KEY,
-                line_user_id VARCHAR(255),
-                product_id VARCHAR(255),
-                recommendation VARCHAR(50),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        conn.commit()
-        cur.close()
-        conn.close()
-    except Exception as e:
-        print(f"Error initializing DB: {e}")
+# Global instances for connection pooling
+db_pool = None
+influx_client = None
+influx_query_api = None
 
-def get_last_recommendation(line_user_id: str, product_id: str) -> str:
-    """Fetch the last recommendation for this user and product."""
+# Database Setup (Async Connection Pooling)
+async def init_services():
+    global db_pool, influx_client, influx_query_api
+    
+    # 1. Initialize asyncpg connection pool
     try:
-        conn = psycopg2.connect(DB_URL)
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT recommendation FROM ai_recommendations_log
-            WHERE line_user_id = %s AND product_id = %s
-            ORDER BY created_at DESC LIMIT 1
-        """, (line_user_id, product_id))
-        row = cur.fetchone()
-        cur.close()
-        conn.close()
-        return row[0] if row else "NONE"
+        db_pool = await asyncpg.create_pool(DB_URL, min_size=5, max_size=20)
+        print("✅ PostgreSQL Connection Pool Initialized")
+    except Exception as e:
+        print(f"❌ Failed to initialize PostgreSQL pool: {e}")
+
+    # 2. Initialize Shared Async InfluxDB Client
+    try:
+        influx_client = InfluxDBClientAsync(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
+        influx_query_api = influx_client.query_api()
+        print("✅ InfluxDB Async Client Initialized")
+    except Exception as e:
+        print(f"❌ Failed to initialize InfluxDB Async Client: {e}")
+
+    # 3. Create AI Memory Table
+    if db_pool:
+        try:
+            async with db_pool.acquire() as conn:
+                await conn.execute("""
+                    CREATE TABLE IF NOT EXISTS ai_recommendations_log (
+                        id SERIAL PRIMARY KEY,
+                        line_user_id VARCHAR(255),
+                        product_id VARCHAR(255),
+                        recommendation VARCHAR(50),
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+        except Exception as e:
+            print(f"Error creating tables: {e}")
+
+async def close_services():
+    if db_pool:
+        await db_pool.close()
+        print("PostgreSQL Pool Closed")
+    if influx_client:
+        await influx_client.close()
+        print("InfluxDB Client Closed")
+
+# Database Operations (Async)
+async def get_last_recommendation(line_user_id: str, product_id: str) -> str:
+    if not db_pool: return "NONE"
+    try:
+        async with db_pool.acquire() as conn:
+            row = await conn.fetchrow("""
+                SELECT recommendation FROM ai_recommendations_log
+                WHERE line_user_id = $1 AND product_id = $2
+                ORDER BY created_at DESC LIMIT 1
+            """, line_user_id, product_id)
+            return row['recommendation'] if row else "NONE"
     except Exception as e:
         print(f"Error fetching last recommendation: {e}")
         return "NONE"
 
-def save_recommendation(line_user_id: str, product_id: str, recommendation: str):
-    """Save the AI's recommendation to memory."""
+async def save_recommendation(line_user_id: str, product_id: str, recommendation: str):
+    if not db_pool: return
     try:
-        conn = psycopg2.connect(DB_URL)
-        cur = conn.cursor()
-        cur.execute("""
-            INSERT INTO ai_recommendations_log (line_user_id, product_id, recommendation)
-            VALUES (%s, %s, %s)
-        """, (line_user_id, product_id, recommendation))
-        conn.commit()
-        cur.close()
-        conn.close()
+        async with db_pool.acquire() as conn:
+            await conn.execute("""
+                INSERT INTO ai_recommendations_log (line_user_id, product_id, recommendation)
+                VALUES ($1, $2, $3)
+            """, line_user_id, product_id, recommendation)
     except Exception as e:
         print(f"Error saving recommendation: {e}")
 
-# Helper Functions
-def get_users_and_products():
-    """Personalization: Read users and their active products from PostgreSQL"""
+async def get_users_and_products() -> dict:
+    if not db_pool: return {}
     try:
-        conn = psycopg2.connect(DB_URL)
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT u.id, u.line_user_id, p.product_id, p.store 
-            FROM users u
-            JOIN products p ON u.id = p.user_id
-            WHERE p.is_active = true AND u.line_user_id IS NOT NULL AND u.line_user_id != ''
-        """)
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
-        
-        users_map = {}
-        for row in rows:
-            uid, line_id, prod_id, store = row
-            if line_id not in users_map:
-                users_map[line_id] = []
-            users_map[line_id].append({"product_id": prod_id, "store": store})
-        return users_map
+        async with db_pool.acquire() as conn:
+            rows = await conn.fetch("""
+                SELECT u.id, u.line_user_id, p.product_id, p.store 
+                FROM users u
+                JOIN products p ON u.id = p.user_id
+                WHERE p.is_active = true AND u.line_user_id IS NOT NULL AND u.line_user_id != ''
+            """)
+            users_map = {}
+            for row in rows:
+                line_id, prod_id, store = row['line_user_id'], row['product_id'], row['store']
+                if line_id not in users_map:
+                    users_map[line_id] = []
+                users_map[line_id].append({"product_id": prod_id, "store": store})
+            return users_map
     except Exception as e:
         print(f"Error fetching from DB: {e}")
         return {}
 
-def query_influxdb(product_id: str, store: str, days: int = 7) -> list:
-    """Fetch average daily prices from InfluxDB."""
-    client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
-    query_api = client.query_api()
+async def query_influxdb(product_id: str, store: str, days: int = 7) -> list:
+    if not influx_query_api: return []
     query = f'''
         from(bucket: "{INFLUX_BUCKET}")
         |> range(start: -{days}d)
@@ -128,7 +140,7 @@ def query_influxdb(product_id: str, store: str, days: int = 7) -> list:
         |> yield(name: "mean")
     '''
     try:
-        tables = query_api.query(query)
+        tables = await influx_query_api.query(query)
         prices = []
         for table in tables:
             for record in table.records:
@@ -136,30 +148,30 @@ def query_influxdb(product_id: str, store: str, days: int = 7) -> list:
                     "date": record.get_time().strftime('%Y-%m-%d'),
                     "price": record.get_value()
                 })
-        client.close()
         return prices
     except Exception as e:
         print(f"InfluxDB error: {e}")
         return []
 
-# 1. Real Web Search Tool (DuckDuckGo)
-def search_web(query: str) -> str:
-    """Tool: Search the web for actual market news or information related to a product."""
-    print(f"[{datetime.now()}] Agent searching web for: {query}")
+# Web Search (Push-based instead of Tool-based to save LLM tokens and confusion)
+async def search_web(query: str) -> str:
+    """Async Search using DuckDuckGo to provide real market context."""
+    print(f"[{datetime.now()}] Fetching market news for: {query}")
     try:
-        results = DDGS().text(query, max_results=3)
-        if not results:
-            return "No recent news found."
-        
-        snippets = [f"- {res['title']}: {res['body']}" for res in results]
-        return "\n".join(snippets)
+        # Prevent aggressive banning by adding a small delay if called concurrently
+        await asyncio.sleep(1)
+        async with AsyncDDGS() as ddgs:
+            results = await ddgs.atext(query + " market news", max_results=2)
+            if not results:
+                return "No recent news found."
+            snippets = [f"- {res['title']}: {res['body']}" for res in results]
+            return "\n".join(snippets)
     except Exception as e:
         print(f"Web search error: {e}")
         return "Failed to search the web."
 
-# 4. Async Execution (httpx instead of requests)
+# LINE Messaging API
 async def send_line_flex(line_user_id: str, ai_result: AIResponse):
-    """LINE Messaging API: Send Flex Message Asynchronously"""
     if not LINE_CHANNEL_ACCESS_TOKEN:
         print("Missing LINE_CHANNEL_ACCESS_TOKEN")
         return
@@ -211,53 +223,43 @@ async def send_line_flex(line_user_id: str, ai_result: AIResponse):
         except Exception as e:
             print(f"Failed to send LINE message: {e}")
 
-# Multi-Agent Workflow
+# Data Analysis
 def run_data_analyst(prices: list) -> dict:
-    """Agent 1: Data Analyst Agent"""
-    if not prices:
-        return {}
-    
+    if not prices: return {}
     price_vals = [p['price'] for p in prices]
-    max_p = max(price_vals)
-    min_p = min(price_vals)
-    start_p = price_vals[0]
-    end_p = price_vals[-1]
+    start_p, end_p = price_vals[0], price_vals[-1]
     
-    volatility = 0
-    if start_p > 0:
-        volatility = abs(end_p - start_p) / start_p * 100
+    volatility = abs(end_p - start_p) / start_p * 100 if start_p > 0 else 0
         
     return {
-        "max_price": max_p,
-        "min_price": min_p,
+        "max_price": max(price_vals),
+        "min_price": min(price_vals),
         "current_price": end_p,
         "volatility_percent": volatility,
         "prices_history": prices
     }
 
-# 2. Redundancy Fix (1 call for tools + JSON) & 4. Rate Limiting Fix (Retry)
+# Financial Advisor (Gemini)
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
-async def run_financial_advisor_async(product_name: str, data_stats: dict, last_recommendation: str) -> AIResponse:
-    """Agent 2: Financial Advisor Agent (Uses Web Tool & Outputs JSON natively)"""
-    if not GEMINI_API_KEY:
-        return None
+async def run_financial_advisor_async(product_name: str, data_stats: dict, last_rec: str, news: str) -> AIResponse:
+    if not GEMINI_API_KEY: return None
         
     def _call_gemini():
-        model = genai.GenerativeModel(
-            model_name='gemini-2.5-flash',
-            tools=[search_web] # 3. Removed query_influxdb from tools to avoid LLM Confusion
-        )
+        model = genai.GenerativeModel('gemini-2.5-flash')
         
         prompt = f"""
         You are an expert Financial Advisor Agent. 
         Analyze the market data for: {product_name}
+        
         Data Statistics: {json.dumps(data_stats)}
         
-        IMPORTANT CONTEXT: Your last recommendation to the user for this product was "{last_recommendation}". 
+        Market News Context:
+        {news}
+        
+        IMPORTANT: Your last recommendation to the user for this product was "{last_rec}". 
         If your new recommendation is the same, acknowledge it or justify why they should still hold/wait/buy.
         
-        Use the `search_web` tool to find recent news about {product_name} that might explain price changes.
-        Provide a recommendation (BUY, WAIT, SELL).
+        Provide a recommendation (BUY, WAIT, SELL) based on the price data and news.
         """
         
         response = model.generate_content(
@@ -273,43 +275,41 @@ async def run_financial_advisor_async(product_name: str, data_stats: dict, last_
         resp_text = await asyncio.to_thread(_call_gemini)
         return AIResponse.parse_raw(resp_text)
     except Exception as e:
-        print(f"Failed to generate or parse AI response: {e}")
-        raise e # Let tenacity retry
+        print(f"Failed to generate AI response: {e}")
+        raise e
 
-# Concurrency Control (Semaphore)
+# Core Workflow
 MAX_CONCURRENT_AI_CALLS = 3
 
 async def process_product(line_id: str, prod_id: str, store: str, semaphore: asyncio.Semaphore):
-    """Process a single product asynchronously with concurrency limits."""
     async with semaphore:
-        prices = query_influxdb(prod_id, store, days=7)
+        # 1. Fetch DB Data concurrently
+        prices = await query_influxdb(prod_id, store, days=7)
         stats = run_data_analyst(prices)
         
-        if not stats:
-            return
-            
-        if stats.get("volatility_percent", 0) < 5.0:
-            print(f"Skipping {prod_id} for user {line_id} - Volatility < 5%")
+        if not stats or stats.get("volatility_percent", 0) < 5.0:
             return
             
         print(f"Analyzing {prod_id} (Volatility: {stats['volatility_percent']:.2f}%)")
         
-        last_rec = get_last_recommendation(line_id, prod_id)
+        # 2. Fetch dependencies concurrently
+        last_rec_task = get_last_recommendation(line_id, prod_id)
+        news_task = search_web(prod_id)
         
+        last_rec, news = await asyncio.gather(last_rec_task, news_task)
+        
+        # 3. Call AI
         try:
-            ai_result = await run_financial_advisor_async(prod_id, stats, last_rec)
-            
+            ai_result = await run_financial_advisor_async(prod_id, stats, last_rec, news)
             if ai_result:
-                save_recommendation(line_id, prod_id, ai_result.recommendation)
+                await save_recommendation(line_id, prod_id, ai_result.recommendation)
                 await send_line_flex(line_id, ai_result)
         except Exception as e:
             print(f"Failed processing {prod_id} for {line_id} after retries: {e}")
 
 async def analyze_and_notify_async():
-    """Main asynchronous function executed by the Scheduler"""
     print(f"[{datetime.now()}] Starting Automated Market Analysis...")
-    init_db()
-    users = get_users_and_products()
+    users = await get_users_and_products()
     
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_AI_CALLS)
     tasks = []
@@ -324,38 +324,40 @@ async def analyze_and_notify_async():
 
 # Scheduler setup
 scheduler = AsyncIOScheduler()
-# Run every morning at 8:00 AM
 scheduler.add_job(analyze_and_notify_async, 'cron', hour=8, minute=0)
 
-# FastAPI setup (API Endpoint)
+# FastAPI setup
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
+    await init_services()
     scheduler.start()
     yield
     scheduler.shutdown()
+    await close_services()
 
 app = FastAPI(title="Agentic AI API", lifespan=lifespan)
 
 @app.get("/")
 def health_check():
-    return {"status": "ok"}
+    return {"status": "ok", "db_pool": db_pool is not None, "influx_client": influx_client is not None}
 
 @app.post("/analyze/on-demand")
 async def trigger_analysis(line_user_id: str, product_id: str, store: str):
     """On-demand AI Analysis for Web Dashboard"""
-    init_db()
-    prices = query_influxdb(product_id, store, days=7)
+    prices = await query_influxdb(product_id, store, days=7)
     stats = run_data_analyst(prices)
     if not stats:
         return {"error": "No data found"}
         
-    last_rec = get_last_recommendation(line_user_id, product_id)
+    last_rec, news = await asyncio.gather(
+        get_last_recommendation(line_user_id, product_id),
+        search_web(product_id)
+    )
+    
     try:
-        ai_result = await run_financial_advisor_async(product_id, stats, last_rec)
-        
+        ai_result = await run_financial_advisor_async(product_id, stats, last_rec, news)
         if ai_result:
-            save_recommendation(line_user_id, product_id, ai_result.recommendation)
+            await save_recommendation(line_user_id, product_id, ai_result.recommendation)
             await send_line_flex(line_user_id, ai_result)
             return {"status": "success", "result": ai_result.model_dump()}
         return {"error": "AI analysis failed"}

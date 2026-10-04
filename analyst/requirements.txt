@@ -1,7 +1,7 @@
 fastapi
 uvicorn
 apscheduler
-psycopg2-binary
+asyncpg
 influxdb-client
 google-generativeai
 requests
@@ -9,3 +9,4 @@ httpx
 pydantic
 duckduckgo-search
 tenacity
+aiohttp
