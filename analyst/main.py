@@ -3,7 +3,8 @@ import json
 import asyncio
 import httpx
 import asyncpg
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks, Request
+from urllib.parse import parse_qs
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import google.generativeai as genai
@@ -70,6 +71,15 @@ async def init_services():
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
+                await conn.execute("""
+                    CREATE TABLE IF NOT EXISTS ai_feedback_log (
+                        id SERIAL PRIMARY KEY,
+                        line_user_id VARCHAR(255),
+                        product_id VARCHAR(255),
+                        vote VARCHAR(20),
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
         except Exception as e:
             print(f"Error creating tables: {e}")
 
@@ -106,6 +116,17 @@ async def save_recommendation(line_user_id: str, product_id: str, recommendation
             """, line_user_id, product_id, recommendation)
     except Exception as e:
         print(f"Error saving recommendation: {e}")
+
+async def save_feedback(line_user_id: str, product_id: str, vote: str):
+    if not db_pool: return
+    try:
+        async with db_pool.acquire() as conn:
+            await conn.execute("""
+                INSERT INTO ai_feedback_log (line_user_id, product_id, vote)
+                VALUES ($1, $2, $3)
+            """, line_user_id, product_id, vote)
+    except Exception as e:
+        print(f"Error saving feedback: {e}")
 
 async def get_users_and_products() -> dict:
     if not db_pool: return {}
@@ -210,6 +231,35 @@ async def send_line_flex(line_user_id: str, ai_result: AIResponse):
                       {"type": "text", "text": f"Recommend: {ai_result.recommendation}", "weight": "bold", "color": color, "size": "lg", "margin": "sm"},
                       {"type": "text", "text": f"Confidence: {ai_result.confidence_score}%", "size": "sm", "margin": "sm"},
                       {"type": "text", "text": ai_result.reasoning, "wrap": True, "margin": "md", "size": "sm"}
+                    ]
+                  },
+                  "footer": {
+                    "type": "box",
+                    "layout": "horizontal",
+                    "spacing": "sm",
+                    "contents": [
+                      {
+                        "type": "button",
+                        "style": "secondary",
+                        "height": "sm",
+                        "action": {
+                          "type": "postback",
+                          "label": "👍 เห็นด้วย",
+                          "data": f"action=feedback&product_id={ai_result.product}&vote=agree",
+                          "displayText": f"ฉันเห็นด้วยกับการวิเคราะห์ {ai_result.product}"
+                        }
+                      },
+                      {
+                        "type": "button",
+                        "style": "secondary",
+                        "height": "sm",
+                        "action": {
+                          "type": "postback",
+                          "label": "👎 ไม่เห็นด้วย",
+                          "data": f"action=feedback&product_id={ai_result.product}&vote=disagree",
+                          "displayText": f"ฉันไม่เห็นด้วยกับการวิเคราะห์ {ai_result.product}"
+                        }
+                      }
                     ]
                   }
                 }
@@ -363,3 +413,30 @@ async def trigger_analysis(line_user_id: str, product_id: str, store: str):
         return {"error": "AI analysis failed"}
     except Exception as e:
         return {"error": f"AI analysis failed after retries: {e}"}
+
+@app.post("/webhook/line")
+async def line_webhook(request: Request):
+    """Receive webhook events from LINE Messaging API (e.g., Postback actions)"""
+    try:
+        body = await request.json()
+        events = body.get("events", [])
+        
+        for event in events:
+            if event.get("type") == "postback":
+                line_user_id = event.get("source", {}).get("userId")
+                postback_data = event.get("postback", {}).get("data", "")
+                
+                parsed = parse_qs(postback_data)
+                
+                if parsed.get("action", [""])[0] == "feedback":
+                    product_id = parsed.get("product_id", [""])[0]
+                    vote = parsed.get("vote", [""])[0]
+                    
+                    if line_user_id and product_id and vote:
+                        await save_feedback(line_user_id, product_id, vote)
+                        print(f"[{datetime.now()}] Feedback saved: User {line_user_id} voted '{vote}' on {product_id}")
+                        
+        return {"status": "ok"}
+    except Exception as e:
+        print(f"Webhook error: {e}")
+        return {"status": "error"}
