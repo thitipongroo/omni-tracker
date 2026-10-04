@@ -20,9 +20,9 @@ func TestEvaluatePriceDrop(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := service.EvaluatePriceDrop(tt.lastPrice, tt.newPrice)
+			result := service.EvaluatePriceDrop(tt.lastPrice, tt.newPrice, 5.0)
 			if result != tt.expected {
-				t.Errorf("EvaluatePriceDrop(%v, %v) = %v; want %v", tt.lastPrice, tt.newPrice, result, tt.expected)
+				t.Errorf("EvaluatePriceDrop(%v, %v, 5.0) = %v; want %v", tt.lastPrice, tt.newPrice, result, tt.expected)
 			}
 		})
 	}
