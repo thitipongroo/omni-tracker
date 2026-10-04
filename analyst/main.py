@@ -317,7 +317,13 @@ async def run_financial_advisor_async(product_name: str, data_stats: dict, last_
             generation_config=genai.GenerationConfig(
                 response_mime_type="application/json",
                 response_schema=AIResponse
-            )
+            ),
+            safety_settings={
+                genai.types.HarmCategory.HARM_CATEGORY_HARASSMENT: genai.types.HarmBlockThreshold.BLOCK_ONLY_HIGH,
+                genai.types.HarmCategory.HARM_CATEGORY_HATE_SPEECH: genai.types.HarmBlockThreshold.BLOCK_ONLY_HIGH,
+                genai.types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: genai.types.HarmBlockThreshold.BLOCK_ONLY_HIGH,
+                genai.types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: genai.types.HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            }
         )
         return response.text
 
@@ -351,11 +357,19 @@ async def process_product(line_id: str, prod_id: str, store: str, semaphore: asy
         # 3. Call AI
         try:
             ai_result = await run_financial_advisor_async(prod_id, stats, last_rec, news)
-            if ai_result:
-                await save_recommendation(line_id, prod_id, ai_result.recommendation)
-                await send_line_flex(line_id, ai_result)
         except Exception as e:
-            print(f"Failed processing {prod_id} for {line_id} after retries: {e}")
+            print(f"Failed processing {prod_id} for {line_id} after retries: {e}. Using fallback.")
+            ai_result = AIResponse(
+                product=prod_id,
+                trend="STABLE",
+                recommendation="WAIT",
+                confidence_score=0,
+                reasoning="⚠️ AI ไม่สามารถวิเคราะห์ข้อมูลได้ในขณะนี้เนื่องจากติดระบบกรองความปลอดภัย หรือระบบขัดข้องชั่วคราว (Fallback Mode)"
+            )
+            
+        if ai_result:
+            await save_recommendation(line_id, prod_id, ai_result.recommendation)
+            await send_line_flex(line_id, ai_result)
 
 async def analyze_and_notify_async():
     print(f"[{datetime.now()}] Starting Automated Market Analysis...")
@@ -406,13 +420,21 @@ async def trigger_analysis(line_user_id: str, product_id: str, store: str):
     
     try:
         ai_result = await run_financial_advisor_async(product_id, stats, last_rec, news)
-        if ai_result:
-            await save_recommendation(line_user_id, product_id, ai_result.recommendation)
-            await send_line_flex(line_user_id, ai_result)
-            return {"status": "success", "result": ai_result.model_dump()}
-        return {"error": "AI analysis failed"}
     except Exception as e:
-        return {"error": f"AI analysis failed after retries: {e}"}
+        print(f"Fallback used for {product_id} due to: {e}")
+        ai_result = AIResponse(
+            product=product_id,
+            trend="STABLE",
+            recommendation="WAIT",
+            confidence_score=0,
+            reasoning="⚠️ AI ไม่สามารถวิเคราะห์ข้อมูลได้ในขณะนี้เนื่องจากติดระบบกรองความปลอดภัย หรือระบบขัดข้องชั่วคราว (Fallback Mode)"
+        )
+        
+    if ai_result:
+        await save_recommendation(line_user_id, product_id, ai_result.recommendation)
+        await send_line_flex(line_user_id, ai_result)
+        return {"status": "success", "result": ai_result.model_dump()}
+    return {"error": "AI analysis failed completely"}
 
 @app.post("/webhook/line")
 async def line_webhook(request: Request):
