@@ -1,175 +1,143 @@
-# 🚀 Omni-Tracker: Market Intelligence Platform (v3.1)
+# 🚀 Omni-Tracker
 
-[![Go](https://img.shields.io/badge/Go-00ADD8?style=flat&logo=go&logoColor=white)](https://go.dev/)
-[![Node.js](https://img.shields.io/badge/Node.js-339933?style=flat&logo=node.js&logoColor=white)](https://nodejs.org/)
-[![React](https://img.shields.io/badge/React-61DAFB?style=flat&logo=react&logoColor=black)](https://reactjs.org/)
-[![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat&logo=vite&logoColor=white)](https://vitejs.dev/)
-[![TailwindCSS](https://img.shields.io/badge/TailwindCSS-06B6D4?style=flat&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
-[![Playwright](https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white)](https://playwright.dev/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=flat&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
-[![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat&logo=redis&logoColor=white)](https://redis.io/)
-[![InfluxDB](https://img.shields.io/badge/InfluxDB-22ADF6?style=flat&logo=influxdb&logoColor=white)](https://www.influxdata.com/)
-[![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)](https://www.docker.com/)
-[![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=flat&logo=github-actions&logoColor=white)](https://github.com/features/actions)
-
-**Omni-Tracker** is a distributed, high-concurrency market intelligence platform. It treats web scrapers as "IoT sensors" that ingest thousands of data points concurrently. Version 3.1 elevates the system to an Enterprise-grade Architecture by introducing **Clean Architecture in Go**, **React + Vite Dashboard**, **Redis Message Queues** for concurrency control, and robust **Security & Performance Patches**.
-
-## ✨ Features
-
-- **Modern Frontend (React + Vite):** A beautiful, responsive dashboard built with React 19, TailwindCSS, and Lucide icons.
-- **Go Clean Architecture:** Backend heavily refactored into a scalable Standard Go Layout (Handlers, Services, Repositories).
-- **Redis Task Queue:** Go API automatically schedules and pushes scraping tasks into a Redis Queue (`LPUSH`). Node.js workers act as isolated consumers (`BRPOP`) to eliminate memory leaks and overlapping cron jobs.
-- **Relational Task Management:** Uses **PostgreSQL + GORM** with optimized database indexes to dynamically manage active URLs and track the real-time status of scrapers (`SUCCESS` / `FAILED`).
-- **Data Visualization & Analytics:** A beautiful **Recharts/Chart.js** modal integrated with **InfluxDB** historical price data directly on the Dashboard.
-- **Enterprise-Grade Security:**
-  - Token-based Admin Login with **Bcrypt Password Hashing**.
-  - **SSRF (Server-Side Request Forgery) Protection** with strict URL Validation and Domain Whitelisting.
-  - **InfluxQL Injection Prevention**.
-  - **Rate Limiting** on critical endpoints to prevent DoS attacks.
-  - **Environment Variable Enforcement** ensuring critical secrets are strictly configured.
-- **Advanced Headless Scraping:** Leverages **Playwright + Stealth Plugin** to bypass modern e-commerce anti-bot protections. NetworkIdle-based synchronization maximizes throughput.
-- **Event-Driven Alerts:** Real-time notifications via LINE Messaging API when prices drop.
-- **Agentic AI (Market Analyst):** An Enterprise-grade Python microservice powered by **Gemini AI**. It features:
-  - **Fully Asynchronous Execution** with Connection Pooling (`asyncpg`) and `InfluxDBClientAsync`.
-  - **Real-time Context Injection** via DuckDuckGo Web Search.
-  - **Human-in-the-Loop Feedback (HITL)** via interactive LINE Flex buttons and Webhooks.
-  - **AI Memory** (PostgreSQL) to remember past recommendations.
-  - **Robust Fallbacks** and Safety Filter tuning.
-- **Automated CI/CD:** GitHub Actions pipeline for linting, testing, and building Docker images.
+**Omni-Tracker** is an enterprise-grade, microservice-based e-commerce price tracking and AI-driven market analysis platform. It autonomously monitors product prices across multiple marketplaces (e.g., Shopee, Lazada), detects anomalies, alerts users in real-time, and leverages Google Gemini AI to provide actionable investment and purchasing recommendations via LINE Flex Messages.
 
 ---
 
-## 🏗️ System Architecture
+## ✨ Core Features
+
+* 🔐 **Multi-Tenant Security:** Secure JWT-based authentication and user registration system.
+* 🕷️ **Evasive Scraper Fleet:** Playwright-based Node.js workers with Proxy Rotation, API interception, and DOM parsing fallback. Hardened with strict timeouts to prevent zombie processes.
+* 🤖 **AI Market Analyst:** Python (FastAPI) service powered by **Google Gemini 1.5 Flash**. Analyzes market volatility, web news context, and historical price data to deliver `BUY/WAIT/SELL` insights.
+* 📊 **Time-Series Data:** High-performance data ingestion using **InfluxDB** for storing massive price fluctuation histories.
+* 💬 **Interactive LINE Integration:** Delivers rich LINE Flex Messages with dynamic feedback voting mechanisms (Agree/Disagree) directly within the LINE app.
+* 🐳 **Production-Ready Dockerization:** Fully containerized with a Multi-stage Docker build, zero-downtime queue architecture, and timezone-synchronized containers.
+
+---
+
+## 🏗️ Architecture overview
+
+The system is fully decoupled into **3 primary microservices** and **3 infrastructure databases**:
 
 ```mermaid
-flowchart LR
-    CI[CI/CD\nGitHub Actions]
-
-    DASH[React Dashboard]
-
-    subgraph Scrapers [Scraper Fleet - Node.js]
-        S1[Playwright Worker 1]
-        S2[Playwright Worker 2]
-    end
-
-    GO["GO - API Gateway\n& Alert Engine"]
+graph TD;
+    User[User/Browser] -->|React SPA| GoAPI[Go Fiber API];
+    User -->|LINE App| Webhook[Python AI Analyst];
     
-    AI["AI Agent - Python\nMarket Analyst\n(APScheduler)"]
+    GoAPI -->|Write Tasks| Redis[(Redis Queue)];
+    GoAPI -->|Manage Users/Products| PG[(PostgreSQL)];
+    GoAPI -->|Write/Query Prices| Influx[(InfluxDB)];
     
-    subgraph Data [Data Layer]
-        PG[(PostgreSQL\nTasks/Config)]
-        REDIS[(Redis\nCache & Queue)]
-        INFLUX[(InfluxDB\nTime-Series)]
-    end
-    
-    subgraph External [External Services]
-        LINE[LINE Notify]
-        ECOM[Shopee / Lazada]
-        GEMINI[Gemini AI]
-    end
+    Scraper[Node.js Scraper Worker] -->|Pop Tasks| Redis;
+    Scraper -->|Scrape| Store(Shopee / Lazada);
+    Scraper -->|Send Price/Status| GoAPI;
 
-    DASH <-->|JWT Auth & REST| GO
-    GO -->|Cron: LPUSH Tasks| REDIS
-    S1 -->|BRPOP: Consume Task| REDIS
-    S2 -->|BRPOP: Consume Task| REDIS
-    GO <-->|Query/Update| PG
-    S1 -->|Scrape Data| ECOM
-    S1 -->|POST /prices| GO
-    GO <-->|Check Last Price| REDIS
-    GO -->|Async Write| INFLUX
-    GO -->|Webhook| LINE
-    CI -.->|Build & Deploy| GO
-    CI -.->|Build & Deploy| Scrapers
-    
-    AI -->|Read History| INFLUX
-    AI <-->|Query LLM| GEMINI
-    AI -->|Flex Message| LINE
-    LINE -->|Webhook - Feedback| AI
+    Python[Python AI Analyst] -->|Read Products| PG;
+    Python -->|Read Prices| Influx;
+    Python -->|Analyze| Gemini(Google Gemini AI);
+    Python -->|Push Flex Msg| LINE(LINE Messaging API);
 ```
+
+### 1. Go API (Core Gateway)
+* Built with **Go Fiber**.
+* Handles User Auth, rate limiting, and RESTful operations.
+* Contains an internal Scheduler that prevents **Queue Poisoning** by safely pushing tasks to Redis.
+* Serves the React Dashboard statically with **SPA fallback routing**.
+
+### 2. Node.js Scraper Worker
+* Built with **Playwright-extra** and `puppeteer-stealth`.
+* Consumes tasks from Redis (`brpop`).
+* intercepts XHR API responses for maximum speed, falling back to DOM parsing if needed.
+
+### 3. Python AI Analyst
+* Built with **FastAPI** and `APScheduler`.
+* Fetches time-series data from InfluxDB and performs volatility calculations.
+* Aggregates real-time news via DuckDuckGo and analyzes data using Gemini.
+* Safe timezone locking mechanism using PostgreSQL `EXTRACT(EPOCH)`.
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Quick Start (Docker Compose)
 
-### Prerequisites
-- Docker & Docker Compose
-- LINE Messaging API Channel Access Token (For Flex Messages & Webhooks)
+### 1. Prerequisites
+Ensure you have the following installed:
+* [Docker Desktop](https://www.docker.com/products/docker-desktop/) or Docker Engine
+* Docker Compose (v2+)
 
-### Installation & Run
+### 2. Configuration
+Create a `.env` file in the root directory and configure the following variables:
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/thitipongroo/omni-tracker.git
-   cd omni-tracker
-   ```
+```env
+# Core System
+API_PORT=3000
+API_KEY=your-internal-secure-key-123
+JWT_SECRET=your-jwt-secret-key
+ADMIN_PASSWORD=admin123
 
-2. **Configure Environment Variables:**
-   Edit the `.env` file. You MUST provide `LINE_CHANNEL_ACCESS_TOKEN`, `GEMINI_API_KEY`, `API_KEY`, and `JWT_SECRET` for the system to boot securely and enable AI features.
-   *(Note: Configure your LINE Webhook URL to point to `/webhook/line` in the Developer Console to enable the Human-in-the-Loop AI Feedback system).*
+# Databases
+DATABASE_URL=host=postgres user=admin password=admin dbname=omnitracker port=5432 sslmode=disable
+REDIS_URL=redis://redis:6379
+INFLUXDB_URL=http://influxdb:8086
+INFLUXDB_TOKEN=super-secret-token
+INFLUXDB_ORG=my-org
+INFLUXDB_BUCKET=market-data
 
-3. **Start the ecosystem via Docker:**
-   ```bash
-   docker-compose up -d --build
-   ```
-   *This command spins up PostgreSQL, Redis, InfluxDB, the Golang API (which statically serves the pre-built React frontend), and the Scraper Worker fleet.*
+# External APIs
+LINE_NOTIFY_TOKEN=your_line_notify_token (Optional)
+LINE_CHANNEL_ACCESS_TOKEN=your_line_channel_access_token
+LINE_CHANNEL_SECRET=your_line_channel_secret
+GEMINI_API_KEY=your_google_gemini_api_key
 
-4. **Access the Dashboard:**
-   Open your browser and navigate to: [http://localhost:3000](http://localhost:3000)
-   *(Default Login Credentials - Username: `admin` / Password: `password123`)*
+# Scraper Configuration
+PROXY_URL=http://user:pass@proxy.example.com:8080 (Optional)
+```
 
-### 🤖 Running the AI Market Analyst (Agentic AI)
-
-The AI service (`ai-analyst`) now runs automatically as part of the `docker-compose up -d --build` stack using **APScheduler**.
-
-**To configure it:**
-1. Ensure you have added both `LINE_CHANNEL_ACCESS_TOKEN` and `GEMINI_API_KEY` in your `.env` file.
-2. The `ai-analyst` container will boot up automatically alongside the API and databases, scheduling periodic background jobs to fetch data from InfluxDB and generate insights.
-
-*(If you wish to run it manually without Docker for development):*
+### 3. Build & Run
+Simply run the following command to spin up the entire cluster:
 ```bash
-cd analyst
-pip install -r requirements.txt
-python main.py
+docker-compose up --build -d
 ```
+
+### 4. Access the Platform
+* **Dashboard / API:** [http://localhost:3000](http://localhost:3000)
+* **AI Analyst Webhook:** `http://localhost:8000/webhook/line`
+* **InfluxDB Admin UI:** [http://localhost:8086](http://localhost:8086)
 
 ---
 
-## 📁 Project Structure
+## 📡 API Endpoints Reference
 
-```text
-omni-tracker/
-├── api/                     # Golang Backend 
-│   ├── internal/            # Clean Architecture Core
-│   │   ├── config/          # Environment configuration
-│   │   ├── handler/         # HTTP Routing, Auth, Rate Limiting
-│   │   ├── models/          # Structs & Data models (GORM)
-│   │   ├── repository/      # GORM, Redis, and InfluxDB instances
-│   │   └── service/         # Task Scheduler & Alerting logic
-│   ├── main.go              # Entry Point
-│   ├── main_test.go         # Unit Tests
-│   └── Dockerfile
-├── dashboard/               # Frontend UI (React + Vite + Tailwind)
-│   ├── src/                 # React Components
-│   ├── package.json         
-│   ├── vite.config.js       
-│   └── tailwind.config.js   
-├── scraper/                 # Node.js Scraper (Playwright, Redis Queue)
-│   ├── Dockerfile
-│   ├── index.js             # Message Queue Consumers (Workers)
-│   └── package.json
-├── analyst/                 # Enterprise Agentic AI (FastAPI + Gemini + APScheduler)
-│   ├── main.py              # AI Daemon, Webhooks, & Async DB Logic
-│   ├── Dockerfile
-│   └── requirements.txt
-├── docker-compose.yml       # Orchestrates the microservice stack
-├── .env                     # Configuration and secrets
-└── .gitignore               # Ignored files
-```
+### Public Routes (Go API)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/login` | Authenticate user and receive JWT token. |
+| `POST` | `/api/register` | Register a new user account. |
+
+### Protected Routes (Requires `Authorization: Bearer <JWT>`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET`  | `/api/profile` | Get current user profile and LINE ID. |
+| `POST` | `/api/profile/line` | Link LINE User ID to account. |
+| `GET`  | `/api/products` | List all tracked products for the user. |
+| `POST` | `/api/products` | Add a new product to track. |
+| `DELETE`| `/api/products/:id` | Stop tracking and delete a product. |
+| `GET`  | `/api/history/:product_id` | Get 30-day time-series price history. |
+| `GET`  | `/api/logs` | View recent system logs for user's products. |
+
+### Internal / Scraper Routes (Requires `Authorization: Bearer <API_KEY>`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/prices` | Submit newly scraped price to InfluxDB. |
+| `PATCH`| `/api/products/:id/status`| Update scraper task status (`SUCCESS`/`FAILED`/`QUEUED`). |
+| `POST` | `/api/logs` | Ingest scraper error logs. |
+
+### AI Analyst Webhooks (Python FastAPI)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/webhook/line` | Receive LINE Messaging API Postback events (Feedback voting). |
+| `POST` | `/analyze/on-demand` | Manually trigger AI Analysis for a specific product. |
 
 ---
 
-## 🤝 Contributing
-Contributions are welcome! Please feel free to submit a Pull Request or open an Issue.
-
-## 📝 License
+## 📜 License
 This project is licensed under the MIT License.
