@@ -185,8 +185,14 @@ async def query_influxdb(product_id: str, store: str, days: int = 7) -> list:
         return []
 
 # Web Search (Push-based instead of Tool-based to save LLM tokens and confusion)
+news_cache = {}
+
 async def search_web(query: str) -> str:
     """Async Search using DuckDuckGo to provide real market context."""
+    if query in news_cache:
+        print(f"[{datetime.now()}] Using cached news for: {query}")
+        return news_cache[query]
+        
     print(f"[{datetime.now()}] Fetching market news for: {query}")
     try:
         # Prevent aggressive banning by adding a small delay if called concurrently
@@ -194,9 +200,11 @@ async def search_web(query: str) -> str:
         async with AsyncDDGS() as ddgs:
             results = await ddgs.atext(query + " market news", max_results=2)
             if not results:
-                return "No recent news found."
+                news_cache[query] = "No recent news found."
+                return news_cache[query]
             snippets = [f"- {res['title']}: {res['body']}" for res in results]
-            return "\n".join(snippets)
+            news_cache[query] = "\n".join(snippets)
+            return news_cache[query]
     except Exception as e:
         print(f"Web search error: {e}")
         return "Failed to search the web."
@@ -383,6 +391,7 @@ async def process_product(line_id: str, prod_id: str, store: str, semaphore: asy
 
 async def analyze_and_notify_async():
     print(f"[{datetime.now()}] Starting Automated Market Analysis...")
+    news_cache.clear() # Clear cache daily for fresh news
     users = await get_users_and_products()
     
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_AI_CALLS)

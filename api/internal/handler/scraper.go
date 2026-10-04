@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 	"github.com/gofiber/fiber/v2"
 	"github.com/redis/go-redis/v9"
@@ -42,8 +43,7 @@ func PostPrice(cfg *config.Config) fiber.Handler {
 		if err == redis.Nil {
 			repository.RDB.Set(repository.Ctx, cacheKey, p.Price, 0)
 		} else if err == nil {
-			var lastPrice float64
-			_, _ = fmt.Sscanf(lastPriceStr, "%f", &lastPrice)
+			lastPrice, _ := strconv.ParseFloat(lastPriceStr, 64)
 
 			if p.Price < lastPrice*0.2 && p.Price > 0 {
 				repository.DB.Model(&models.Product{}).Where("product_id = ? AND store = ?", p.ProductID, p.Store).Update("status", "ANOMALY")
