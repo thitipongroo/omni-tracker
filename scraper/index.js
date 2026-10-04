@@ -79,7 +79,7 @@ async function processTask(browser, task) {
                 proxyConfig.username = decodeURIComponent(urlObj.username);
                 proxyConfig.password = decodeURIComponent(urlObj.password);
             }
-        } catch (e) {
+        } catch {
             // Ignore parse errors, fallback to raw server string
         }
         contextOptions.proxy = proxyConfig;
@@ -110,7 +110,7 @@ async function processTask(browser, task) {
                     if (json?.data?.price) {
                         interceptedPrice = json.data.price / 100000;
                     }
-                } catch (e) {
+                } catch {
                     // Ignore parsing errors for partial responses
                 }
             }
@@ -120,7 +120,7 @@ async function processTask(browser, task) {
                     if (json?.module?.price?.salePrice?.value) {
                         interceptedPrice = parseFloat(json.module.price.salePrice.value);
                     }
-                } catch (e) {
+                } catch {
                     // Ignore parsing errors
                 }
             }
@@ -153,7 +153,7 @@ async function processTask(browser, task) {
             } catch (err) {
                 console.log(`⚠️ API Intercept & Selector '${task.selector}' failed.`);
                 await sendLog(task.product_id, task.store, `DOM locator failed: ${err.message}`, 'WARN');
-                throw new Error('Failed to extract price via XHR and DOM');
+                throw new Error('Failed to extract price via XHR and DOM', { cause: err });
             }
         } else {
             throw new Error('No price found and no DOM selector provided');
