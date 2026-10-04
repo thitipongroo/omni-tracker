@@ -92,7 +92,7 @@ flowchart LR
     AI -->|Read History| INFLUX
     AI <-->|Query LLM| GEMINI
     AI -->|Flex Message| LINE
-    LINE -->|Webhook (Feedback)| AI
+    LINE -->|Webhook - Feedback| AI
 ```
 
 ---
