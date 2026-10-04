@@ -43,9 +43,7 @@
 
 ```mermaid
 flowchart LR
-    subgraph Automation [CI/CD]
-        CI[GitHub Actions]
-    end
+    CI[CI/CD\nGitHub Actions]
 
     subgraph Frontend [UI Layer]
         DASH[React Dashboard]
