@@ -29,7 +29,7 @@
   - **Environment Variable Enforcement** ensuring critical secrets are strictly configured.
 - **Advanced Headless Scraping:** Leverages **Playwright + Stealth Plugin** to bypass modern e-commerce anti-bot protections. NetworkIdle-based synchronization maximizes throughput.
 - **Event-Driven Alerts:** Real-time notifications via LINE Messaging API when prices drop.
-- **Agentic AI (Market Analyst):** A Python microservice that fetches weekly pricing data from InfluxDB and uses **Gemini AI** to provide smart analysis and personalized recommendations directly via LINE Notify.
+- **Agentic AI (Market Analyst):** A Python microservice that fetches weekly pricing data from InfluxDB and uses **Gemini AI** to provide smart analysis and personalized recommendations directly via LINE Notify. It now runs continuously as a background service powered by **APScheduler**.
 - **Automated CI/CD:** GitHub Actions pipeline for linting, testing, and building Docker images.
 
 ---
@@ -55,6 +55,10 @@ flowchart LR
         GO["API Gateway\n& Alert Engine"]
     end
     
+    subgraph Analytics [AI Agent - Python]
+        AI["Market Analyst\n(APScheduler)"]
+    end
+    
     subgraph Data [Data Layer]
         PG[(PostgreSQL\nTasks/Config)]
         REDIS[(Redis\nCache & Queue)]
@@ -64,6 +68,7 @@ flowchart LR
     subgraph External [External Services]
         LINE[LINE Notify]
         ECOM[Shopee / Lazada]
+        GEMINI[Gemini AI]
     end
 
     DASH <-->|JWT Auth & REST| GO
@@ -78,6 +83,10 @@ flowchart LR
     GO -->|Webhook| LINE
     CI -.->|Build & Deploy| GO
     CI -.->|Build & Deploy| S1
+    
+    AI -->|Read History| INFLUX
+    AI <-->|Query LLM| GEMINI
+    AI -->|Smart Alert| LINE
 ```
 
 ---
@@ -111,16 +120,18 @@ flowchart LR
 
 ### 🤖 Running the AI Market Analyst (Agentic AI)
 
+The AI service (`ai-analyst`) now runs automatically as part of the `docker-compose up -d --build` stack using **APScheduler**.
+
+**To configure it:**
 1. Ensure you have added both `LINE_NOTIFY_TOKEN` and `GEMINI_API_KEY` in your `.env` file.
-2. Install the required Python dependencies:
-   ```bash
-   cd analyst
-   pip install -r requirements.txt
-   ```
-3. Run the AI script to fetch data, generate insights, and send a Smart Alert to LINE:
-   ```bash
-   python market_analyst.py
-   ```
+2. The `ai-analyst` container will boot up automatically alongside the API and databases, scheduling periodic background jobs to fetch data from InfluxDB and generate insights.
+
+*(If you wish to run it manually without Docker for development):*
+```bash
+cd analyst
+pip install -r requirements.txt
+python main.py
+```
 
 ---
 
@@ -147,8 +158,10 @@ omni-tracker/
 │   ├── Dockerfile
 │   ├── index.js             # Message Queue Consumers (Workers)
 │   └── package.json
-├── analyst/                 # Agentic AI Microservice (Python + Gemini)
-│   ├── market_analyst.py    # AI Market Analyst Script
+├── analyst/                 # Agentic AI Microservice (Python + Gemini + APScheduler)
+│   ├── main.py              # AI Daemon Service (Scheduler)
+│   ├── market_analyst.py    # Core Analysis Logic
+│   ├── Dockerfile
 │   └── requirements.txt
 ├── docker-compose.yml       # Orchestrates the microservice stack
 ├── .env                     # Configuration and secrets

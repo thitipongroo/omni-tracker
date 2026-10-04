@@ -1,3 +1,8 @@
+fastapi
+uvicorn
+apscheduler
+psycopg2-binary
 influxdb-client
 google-generativeai
 requests
+pydantic
