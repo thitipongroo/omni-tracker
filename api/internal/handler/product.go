@@ -49,7 +49,9 @@ func AddProduct(c *fiber.Ctx) error {
 		p.UserID = userID
 	}
 	p.Status = "PENDING"
-	repository.DB.Create(p)
+	if err := repository.DB.Create(p).Error; err != nil {
+		return c.Status(409).JSON(fiber.Map{"error": "Failed to track product (Duplicate or Database Error)"})
+	}
 	return c.JSON(p)
 }
 

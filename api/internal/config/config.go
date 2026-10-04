@@ -17,6 +17,7 @@ type Config struct {
 	RedisURL     string
 	APIPort      string
 	JWTSecret    string
+	CORSOrigins  string
 }
 
 func LoadConfig() *Config {
@@ -32,6 +33,7 @@ func LoadConfig() *Config {
 		RedisURL:     getEnv("REDIS_URL", "redis:6379"),
 		APIPort:      getEnv("API_PORT", "3000"),
 		JWTSecret:    getRequiredEnv("JWT_SECRET"),
+		CORSOrigins:  getEnv("CORS_ORIGINS", "http://localhost:3000, http://127.0.0.1:3000"),
 	}
 }
 

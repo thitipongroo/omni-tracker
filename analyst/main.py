@@ -376,14 +376,8 @@ async def process_product(line_id: str, prod_id: str, store: str, semaphore: asy
         try:
             ai_result = await run_financial_advisor_async(prod_id, stats, last_rec, news)
         except Exception as e:
-            print(f"Failed processing {prod_id} for {line_id} after retries: {e}. Using fallback.")
-            ai_result = AIResponse(
-                product=prod_id,
-                trend="STABLE",
-                recommendation="WAIT",
-                confidence_score=0,
-                reasoning="⚠️ AI ไม่สามารถวิเคราะห์ข้อมูลได้ในขณะนี้เนื่องจากติดระบบกรองความปลอดภัย หรือระบบขัดข้องชั่วคราว (Fallback Mode)"
-            )
+            print(f"Fallback skipped for {product_id} due to: {e}. Failing silently to prevent spam.")
+            ai_result = None
             
         if ai_result:
             await save_recommendation(line_id, prod_id, ai_result.recommendation)
@@ -471,14 +465,8 @@ async def trigger_analysis(line_user_id: str, product_id: str, store: str):
     try:
         ai_result = await run_financial_advisor_async(product_id, stats, last_rec, news)
     except Exception as e:
-        print(f"Fallback used for {product_id} due to: {e}")
-        ai_result = AIResponse(
-            product=product_id,
-            trend="STABLE",
-            recommendation="WAIT",
-            confidence_score=0,
-            reasoning="⚠️ AI ไม่สามารถวิเคราะห์ข้อมูลได้ในขณะนี้เนื่องจากติดระบบกรองความปลอดภัย หรือระบบขัดข้องชั่วคราว (Fallback Mode)"
-        )
+        print(f"Fallback skipped for {product_id} due to: {e}. Failing silently to prevent spam.")
+        ai_result = None
         
     if ai_result:
         await save_recommendation(line_user_id, product_id, ai_result.recommendation)

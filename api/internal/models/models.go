@@ -18,9 +18,9 @@ type StoreConfig struct {
 
 type Product struct {
 	ID            uint       `gorm:"primaryKey" json:"id"`
-	UserID        uint       `gorm:"index" json:"user_id"`
-	ProductID     string     `gorm:"uniqueIndex:idx_product_store;not null" json:"product_id"`
-	Store         string     `gorm:"uniqueIndex:idx_product_store;not null" json:"store"`
+	UserID        uint       `gorm:"uniqueIndex:idx_user_product_store" json:"user_id"`
+	ProductID     string     `gorm:"uniqueIndex:idx_user_product_store;not null" json:"product_id"`
+	Store         string     `gorm:"uniqueIndex:idx_user_product_store;not null" json:"store"`
 	URL           string     `gorm:"not null" json:"url"`
 	IsActive      bool       `gorm:"index;default:true" json:"is_active"`
 	Status        string     `gorm:"default:'PENDING'" json:"status"`

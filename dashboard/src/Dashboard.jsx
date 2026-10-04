@@ -1,12 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { LogOut, Plus, Trash2, Terminal } from 'lucide-react';
+import { LogOut, Plus, Trash2, Terminal, Activity, X } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 export default function Dashboard({ token, setToken }) {
   const [products, setProducts] = useState([]);
   const [logs, setLogs] = useState([]);
   const [showLogs, setShowLogs] = useState(false);
   const [form, setForm] = useState({ product_id: '', store: 'shopee', url: '' });
+  const [errorMsg, setErrorMsg] = useState('');
+  
+  // Modal State
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [chartData, setChartData] = useState([]);
+  const [loadingModal, setLoadingModal] = useState(false);
 
   const api = axios.create({
     baseURL: 'http://localhost:3000/api',
@@ -27,15 +34,40 @@ export default function Dashboard({ token, setToken }) {
 
   const addProduct = async (e) => {
     e.preventDefault();
-    await api.post('/products', form);
-    setForm({ product_id: '', store: 'shopee', url: '' });
-    fetchData();
+    setErrorMsg('');
+    try {
+      await api.post('/products', form);
+      setForm({ product_id: '', store: 'shopee', url: '' });
+      fetchData();
+    } catch (err) {
+      setErrorMsg(err.response?.data?.error || 'Failed to track product.');
+    }
   };
 
   const deleteProduct = async (id) => {
     if (confirm('Delete this tracker?')) {
       await api.delete(`/products/${id}`);
       fetchData();
+    }
+  };
+
+  const openAiModal = async (product) => {
+    setSelectedProduct(product);
+    setLoadingModal(true);
+    setChartData([]);
+    
+    try {
+      const histRes = await api.get(`/history/${product.product_id}`);
+      // Format time for Recharts
+      const formatted = (histRes.data || []).map(d => ({
+        ...d,
+        time: new Date(d.time).toLocaleDateString()
+      }));
+      setChartData(formatted);
+    } catch (e) {
+      console.error("Failed to fetch historical data", e);
+    } finally {
+      setLoadingModal(false);
     }
   };
 
@@ -46,7 +78,7 @@ export default function Dashboard({ token, setToken }) {
           Omni-Tracker Dashboard
         </h1>
         <div className="flex gap-4">
-          <button onClick={() => setShowLogs(!showLogs)} className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-lg transition-colors border border-slate-700">
+          <button onClick={() => setShowLogs(!showLogs)} className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-lg transition-colors border border-slate-700 text-white">
             <Terminal size={18} /> {showLogs ? 'Hide Logs' : 'View Logs'}
           </button>
           <button onClick={() => setToken(null)} className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2 rounded-lg transition-colors border border-red-500/20">
@@ -59,6 +91,7 @@ export default function Dashboard({ token, setToken }) {
         <div className="lg:col-span-1 space-y-6">
           <div className="bg-darker p-6 rounded-2xl border border-slate-800 shadow-xl">
             <h2 className="text-xl font-semibold mb-6 flex items-center gap-2 text-white"><Plus size={20}/> New Tracker</h2>
+            {errorMsg && <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg text-sm">{errorMsg}</div>}
             <form onSubmit={addProduct} className="space-y-4">
               <input type="text" placeholder="Product ID" value={form.product_id} onChange={e => setForm({...form, product_id: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-primary outline-none" required />
               <select value={form.store} onChange={e => setForm({...form, store: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-primary outline-none">
@@ -90,7 +123,7 @@ export default function Dashboard({ token, setToken }) {
             </div>
           ) : (
             <div className="bg-darker rounded-2xl border border-slate-800 shadow-xl overflow-hidden">
-              <table className="w-full text-left">
+              <table className="w-full text-left text-white">
                 <thead className="bg-slate-900/50 border-b border-slate-800 text-slate-400">
                   <tr>
                     <th className="p-4 font-medium">Product ID</th>
@@ -113,8 +146,11 @@ export default function Dashboard({ token, setToken }) {
                       <td className="p-4 text-sm text-slate-400">
                         {p.last_scraped_at ? new Date(p.last_scraped_at).toLocaleString() : 'Pending...'}
                       </td>
-                      <td className="p-4 text-right">
-                        <button onClick={() => deleteProduct(p.id)} className="text-slate-500 hover:text-red-400 transition-colors p-2 rounded-lg hover:bg-red-500/10">
+                      <td className="p-4 text-right flex justify-end gap-2">
+                        <button onClick={() => openAiModal(p)} className="text-slate-500 hover:text-blue-400 transition-colors p-2 rounded-lg hover:bg-blue-500/10" title="View Analytics">
+                          <Activity size={18} />
+                        </button>
+                        <button onClick={() => deleteProduct(p.id)} className="text-slate-500 hover:text-red-400 transition-colors p-2 rounded-lg hover:bg-red-500/10" title="Delete">
                           <Trash2 size={18} />
                         </button>
                       </td>
@@ -131,6 +167,55 @@ export default function Dashboard({ token, setToken }) {
           )}
         </div>
       </div>
+
+      {selectedProduct && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+           <div className="bg-darker rounded-2xl border border-slate-800 shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
+                 <div>
+                    <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                       <Activity className="text-primary" /> Market Analytics
+                    </h2>
+                    <p className="text-slate-400 mt-1">Product: <span className="font-mono text-white">{selectedProduct.product_id}</span> ({selectedProduct.store})</p>
+                 </div>
+                 <button onClick={() => setSelectedProduct(null)} className="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 p-2 rounded-full transition-colors">
+                    <X size={20} />
+                 </button>
+              </div>
+              <div className="p-6 overflow-y-auto flex-1">
+                 {loadingModal ? (
+                    <div className="flex justify-center items-center h-64 text-slate-400">Loading historical data...</div>
+                 ) : (
+                    <div className="space-y-8">
+                       <div className="h-80 w-full bg-slate-900/30 p-4 rounded-xl border border-slate-800">
+                          {chartData.length > 0 ? (
+                             <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={chartData}>
+                                   <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                                   <XAxis dataKey="time" stroke="#94a3b8" tick={{fill: '#94a3b8'}} />
+                                   <YAxis stroke="#94a3b8" tick={{fill: '#94a3b8'}} domain={['auto', 'auto']} />
+                                   <Tooltip contentStyle={{backgroundColor: '#0f172a', borderColor: '#334155', color: '#fff'}} itemStyle={{color: '#38bdf8'}} />
+                                   <Line type="monotone" dataKey="price" stroke="#38bdf8" strokeWidth={3} dot={{r: 4, fill: '#0f172a', stroke: '#38bdf8', strokeWidth: 2}} activeDot={{r: 6}} />
+                                </LineChart>
+                             </ResponsiveContainer>
+                          ) : (
+                             <div className="flex justify-center items-center h-full text-slate-500">No historical data available for this product yet.</div>
+                          )}
+                       </div>
+                       
+                       <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-6">
+                          <h3 className="text-lg font-bold text-blue-400 mb-2">Automated AI Market Analyst</h3>
+                          <p className="text-slate-300 text-sm leading-relaxed">
+                             This system automatically evaluates historical price trends and market news every morning at 08:00 AM using Gemini AI. 
+                             If a significant pattern or price drop is detected, the AI will send a real-time Flex Message directly to your LINE account with a recommendation to BUY, SELL, or WAIT.
+                          </p>
+                       </div>
+                    </div>
+                 )}
+              </div>
+           </div>
+        </div>
+      )}
     </div>
   );
 }
