@@ -382,7 +382,7 @@ async def process_product(line_id: str, prod_id: str, store: str, semaphore: asy
         try:
             ai_result = await run_financial_advisor_async(prod_id, stats, last_rec, news)
         except Exception as e:
-            print(f"Fallback skipped for {product_id} due to: {e}. Failing silently to prevent spam.")
+            print(f"Fallback skipped for {prod_id} due to: {e}. Failing silently to prevent spam.")
             ai_result = None
             
         if ai_result:

@@ -216,10 +216,15 @@ async function runScraperFleet() {
                     shouldRestart = true;
                 }
 
-                // Process task asynchronously without blocking the loop
-                processTask(browser, task).catch(e => console.error(e)).finally(() => {
-                    activeTasks--;
-                });
+                // Process task asynchronously with a hard timeout to prevent zombie tasks freezing the fleet
+                const taskPromise = processTask(browser, task);
+                const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Hard Task Timeout (60s)')), 60000));
+                
+                Promise.race([taskPromise, timeoutPromise])
+                    .catch(e => console.error(`👷 Task Error:`, e.message))
+                    .finally(() => {
+                        activeTasks--;
+                    });
             }
         } catch (error) {
             console.error(`👷 Worker encountered error:`, error.message);
