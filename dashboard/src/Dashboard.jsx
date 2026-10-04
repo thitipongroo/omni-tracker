@@ -18,7 +18,7 @@ export default function Dashboard({ token, setToken }) {
   const [loadingModal, setLoadingModal] = useState(false);
 
   const api = axios.create({
-    baseURL: 'http://localhost:3000/api',
+    baseURL: '/api',
     headers: { Authorization: `Bearer ${token}` }
   });
 

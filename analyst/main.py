@@ -47,12 +47,18 @@ influx_query_api = None
 async def init_services():
     global db_pool, influx_client, influx_query_api
     
-    # 1. Initialize asyncpg connection pool
-    try:
-        db_pool = await asyncpg.create_pool(DB_URL, min_size=5, max_size=20)
-        print("✅ PostgreSQL Connection Pool Initialized")
-    except Exception as e:
-        print(f"❌ Failed to initialize PostgreSQL pool: {e}")
+    # 1. Initialize asyncpg connection pool with Retry Logic
+    for i in range(10):
+        try:
+            db_pool = await asyncpg.create_pool(DB_URL, min_size=5, max_size=20)
+            print("✅ PostgreSQL Connection Pool Initialized")
+            break
+        except Exception as e:
+            print(f"⏳ Waiting for PostgreSQL (Attempt {i+1}/10): {e}")
+            await asyncio.sleep(3)
+            
+    if not db_pool:
+        print("❌ FATAL: Could not connect to PostgreSQL after 10 attempts.")
 
     # 2. Initialize Shared Async InfluxDB Client
     try:

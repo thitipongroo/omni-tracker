@@ -15,12 +15,12 @@ export default function Login({ setToken }) {
     setSuccess('');
     try {
       if (isRegistering) {
-        await axios.post('http://localhost:3000/api/register', { username, password });
+        await axios.post('/api/register', { username, password });
         setSuccess('Registration successful! Please sign in.');
         setIsRegistering(false);
         setPassword('');
       } else {
-        const res = await axios.post('http://localhost:3000/api/login', { username, password });
+        const res = await axios.post('/api/login', { username, password });
         setToken(res.data.token);
       }
     } catch (err) {
