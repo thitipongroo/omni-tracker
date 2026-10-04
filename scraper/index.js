@@ -71,9 +71,20 @@ async function processTask(browser, task) {
     
     if (PROXY_URLS.length > 0) {
         const randomProxy = PROXY_URLS[Math.floor(Math.random() * PROXY_URLS.length)];
-        contextOptions.proxy = { server: randomProxy };
-        console.log(`🛡️ Assigned Rotating Proxy: ${randomProxy}`);
-        await sendLog(task.product_id, task.store, `Using proxy: ${randomProxy}`, 'INFO');
+        const proxyConfig = { server: randomProxy };
+        try {
+            const urlObj = new URL(randomProxy);
+            if (urlObj.username || urlObj.password) {
+                proxyConfig.server = `${urlObj.protocol}//${urlObj.host}`;
+                proxyConfig.username = decodeURIComponent(urlObj.username);
+                proxyConfig.password = decodeURIComponent(urlObj.password);
+            }
+        } catch (e) {
+            // Ignore parse errors, fallback to raw server string
+        }
+        contextOptions.proxy = proxyConfig;
+        console.log(`🛡️ Assigned Rotating Proxy: ${proxyConfig.server}`);
+        await sendLog(task.product_id, task.store, `Using proxy: ${proxyConfig.server}`, 'INFO');
     }
 
     const context = await browser.newContext(contextOptions);

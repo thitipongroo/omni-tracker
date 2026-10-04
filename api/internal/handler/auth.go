@@ -12,6 +12,33 @@ import (
 	"omni-tracker-api/internal/repository"
 )
 
+func Register(c *fiber.Ctx) error {
+	var payload struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := c.BodyParser(&payload); err != nil {
+		return c.Status(400).SendString("Invalid body")
+	}
+
+	if len(payload.Username) < 3 || len(payload.Password) < 6 {
+		return c.Status(400).JSON(fiber.Map{"error": "Username must be >= 3 and password >= 6 characters"})
+	}
+
+	hashed, _ := bcrypt.GenerateFromPassword([]byte(payload.Password), bcrypt.DefaultCost)
+	user := models.User{
+		Username: payload.Username,
+		Password: string(hashed),
+		Role:     "user",
+	}
+
+	if err := repository.DB.Create(&user).Error; err != nil {
+		return c.Status(409).JSON(fiber.Map{"error": "Username already exists"})
+	}
+
+	return c.JSON(fiber.Map{"status": "success", "message": "Registered successfully"})
+}
+
 func Login(cfg *config.Config) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var payload struct {
@@ -103,4 +130,26 @@ func ScraperMiddleware(cfg *config.Config) fiber.Handler {
 		
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized Scraper"})
 	}
+}
+
+func GetProfile(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(uint)
+	var user models.User
+	repository.DB.First(&user, userID)
+	return c.JSON(fiber.Map{
+		"username": user.Username,
+		"line_user_id": user.LineUserID,
+	})
+}
+
+func UpdateLineID(c *fiber.Ctx) error {
+	var payload struct {
+		LineUserID string `json:"line_user_id"`
+	}
+	if err := c.BodyParser(&payload); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid payload"})
+	}
+	userID := c.Locals("userID").(uint)
+	repository.DB.Model(&models.User{}).Where("id = ?", userID).Update("line_user_id", payload.LineUserID)
+	return c.JSON(fiber.Map{"status": "success", "line_user_id": payload.LineUserID})
 }

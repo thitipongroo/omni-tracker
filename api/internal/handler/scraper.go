@@ -37,6 +37,12 @@ func PostPrice(cfg *config.Config) fiber.Handler {
 			return c.SendStatus(400)
 		}
 
+		// Protect database and graphs from zero/negative corrupted data
+		if p.Price <= 0 {
+			repository.DB.Model(&models.Product{}).Where("product_id = ? AND store = ?", p.ProductID, p.Store).Update("status", "FAILED")
+			return c.Status(400).SendString("Invalid price: must be greater than 0")
+		}
+
 		cacheKey := fmt.Sprintf("price:%s:%s", p.Store, p.ProductID)
 		lastPriceStr, err := repository.RDB.Get(repository.Ctx, cacheKey).Result()
 
@@ -45,7 +51,7 @@ func PostPrice(cfg *config.Config) fiber.Handler {
 		} else if err == nil {
 			lastPrice, _ := strconv.ParseFloat(lastPriceStr, 64)
 
-			if p.Price < lastPrice*0.2 && p.Price > 0 {
+			if p.Price < lastPrice*0.2 {
 				repository.DB.Model(&models.Product{}).Where("product_id = ? AND store = ?", p.ProductID, p.Store).Update("status", "ANOMALY")
 				return c.SendStatus(200) // Skip saving this weird data
 			}

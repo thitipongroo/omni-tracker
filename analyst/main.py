@@ -313,7 +313,7 @@ async def run_financial_advisor_async(product_name: str, data_stats: dict, last_
     if not GEMINI_API_KEY: return None
         
     def _call_gemini():
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        model = genai.GenerativeModel('gemini-1.5-flash')
         
         prompt = f"""
         You are an expert Financial Advisor Agent. 

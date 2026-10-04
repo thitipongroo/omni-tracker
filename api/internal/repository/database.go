@@ -12,7 +12,7 @@ import (
 
 var DB *gorm.DB
 
-func InitDB(dsn string) {
+func InitDB(dsn string, adminPass string) {
 	var err error
 	for i := 0; i < 5; i++ {
 		DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
@@ -36,10 +36,10 @@ func InitDB(dsn string) {
 		sqlDB.SetConnMaxLifetime(time.Hour)
 	}
 
-	seedDefaults()
+	seedDefaults(adminPass)
 }
 
-func seedDefaults() {
+func seedDefaults(adminPass string) {
 	var count int64
 	DB.Model(&models.StoreConfig{}).Count(&count)
 	if count == 0 {
@@ -50,7 +50,7 @@ func seedDefaults() {
 	var userCount int64
 	DB.Model(&models.User{}).Count(&userCount)
 	if userCount == 0 {
-		hashed, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
+		hashed, _ := bcrypt.GenerateFromPassword([]byte(adminPass), bcrypt.DefaultCost)
 		DB.Create(&models.User{Username: "admin", Password: string(hashed), Role: "admin"})
 	}
 }

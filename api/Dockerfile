@@ -8,6 +8,8 @@ RUN go build -o /app/main main.go
 
 # Stage 2: Run
 FROM alpine:latest
+RUN apk --no-cache add ca-certificates tzdata
+ENV TZ=Asia/Bangkok
 WORKDIR /app
 COPY --from=builder /app/main .
 COPY dashboard ./dashboard

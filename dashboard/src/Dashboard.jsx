@@ -9,6 +9,8 @@ export default function Dashboard({ token, setToken }) {
   const [showLogs, setShowLogs] = useState(false);
   const [form, setForm] = useState({ product_id: '', store: 'shopee', url: '' });
   const [errorMsg, setErrorMsg] = useState('');
+  const [lineId, setLineId] = useState('');
+  const [lineSaveStatus, setLineSaveStatus] = useState('');
   
   // Modal State
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -22,9 +24,14 @@ export default function Dashboard({ token, setToken }) {
 
   const fetchData = async () => {
     try {
-      const [prodRes, logRes] = await Promise.all([api.get('/products'), api.get('/logs')]);
+      const [prodRes, logRes, profileRes] = await Promise.all([
+        api.get('/products'), 
+        api.get('/logs'),
+        api.get('/profile').catch(() => ({ data: {} }))
+      ]);
       setProducts(prodRes.data || []);
       setLogs(logRes.data || []);
+      setLineId(profileRes.data?.line_user_id || '');
     } catch (e) {
       if (e.response?.status === 401) setToken(null);
     }
@@ -41,6 +48,18 @@ export default function Dashboard({ token, setToken }) {
       fetchData();
     } catch (err) {
       setErrorMsg(err.response?.data?.error || 'Failed to track product.');
+    }
+  };
+
+  const saveLineId = async (e) => {
+    e.preventDefault();
+    setLineSaveStatus('Saving...');
+    try {
+      await api.post('/profile/line', { line_user_id: lineId });
+      setLineSaveStatus('Saved successfully!');
+      setTimeout(() => setLineSaveStatus(''), 3000);
+    } catch (err) {
+      setLineSaveStatus('Failed to save');
     }
   };
 
@@ -100,6 +119,18 @@ export default function Dashboard({ token, setToken }) {
               </select>
               <input type="url" placeholder="Product URL" value={form.url} onChange={e => setForm({...form, url: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-primary outline-none" required />
               <button type="submit" className="w-full bg-gradient-to-r from-primary to-secondary text-white font-bold py-3 rounded-lg hover:opacity-90 transition-all shadow-lg shadow-primary/20">Track Product</button>
+            </form>
+          </div>
+
+          <div className="bg-darker p-6 rounded-2xl border border-slate-800 shadow-xl mt-6">
+            <h2 className="text-xl font-semibold mb-4 text-white flex items-center gap-2">📱 Link LINE Account</h2>
+            <p className="text-sm text-slate-400 mb-4">Set your LINE User ID to receive AI market alerts directly to your chat.</p>
+            <form onSubmit={saveLineId} className="space-y-4">
+              <input type="text" placeholder="U1234567890abcdef..." value={lineId} onChange={e => setLineId(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-green-500 outline-none" required />
+              <button type="submit" className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg transition-colors shadow-lg shadow-green-500/20">
+                 Save LINE ID
+              </button>
+              {lineSaveStatus && <p className="text-sm text-center text-green-400">{lineSaveStatus}</p>}
             </form>
           </div>
         </div>

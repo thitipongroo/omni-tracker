@@ -18,7 +18,7 @@ func main() {
 	cfg := config.LoadConfig()
 
 	// Initialize Storage Layer
-	repository.InitDB(cfg.DatabaseURL)
+	repository.InitDB(cfg.DatabaseURL, cfg.AdminPass)
 	repository.InitRedis(cfg.RedisURL)
 	repository.InitInflux(cfg.InfluxURL, cfg.InfluxToken, cfg.InfluxOrg, cfg.InfluxBucket)
 
@@ -38,9 +38,18 @@ func main() {
 		Max:        5,
 		Expiration: 1 * time.Minute,
 	}), handler.Login(cfg))
+	
+	apiGroup.Post("/register", limiter.New(limiter.Config{
+		Max:        5,
+		Expiration: 1 * time.Minute,
+	}), handler.Register)
 
 	// Protected User Routes
 	userRoutes := apiGroup.Group("", handler.UserMiddleware(cfg))
+	
+	// User Profile
+	userRoutes.Get("/profile", handler.GetProfile)
+	userRoutes.Post("/profile/line", handler.UpdateLineID)
 	
 	// Product Management
 	userRoutes.Get("/products", handler.GetProducts)
