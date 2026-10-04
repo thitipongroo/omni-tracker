@@ -45,22 +45,16 @@
 flowchart LR
     CI[CI/CD\nGitHub Actions]
 
-    subgraph Frontend [UI Layer]
-        DASH[React Dashboard]
-    end
+    DASH[React Dashboard]
 
     subgraph Scrapers [Scraper Fleet - Node.js]
         S1[Playwright Worker 1]
         S2[Playwright Worker 2]
     end
 
-    subgraph Core [Core API - Go]
-        GO["API Gateway\n& Alert Engine"]
-    end
+    GO["GO - API Gateway\n& Alert Engine"]
     
-    subgraph Analytics [AI Agent - Python]
-        AI["Market Analyst\n(APScheduler)"]
-    end
+    AI["AI Agent - Python\nMarket Analyst\n(APScheduler)"]
     
     subgraph Data [Data Layer]
         PG[(PostgreSQL\nTasks/Config)]
