@@ -66,7 +66,9 @@ func PostPrice(cfg *config.Config) fiber.Handler {
 				if err := repository.DB.First(&u, prod.UserID).Error; err == nil && u.LineUserID != "" {
 					msg := fmt.Sprintf("🚨 Price Drop Alert!\n%s at %s dropped from %.2f to %.2f THB\nLink: %s",
 						prod.ProductID, prod.Store, lastPrice, p.Price, prod.URL)
-					go service.SendLinePush(context.Background(), cfg.LineChannelToken, u.LineUserID, msg)
+					go func() {
+						_ = service.SendLinePush(context.Background(), cfg.LineChannelToken, u.LineUserID, msg)
+					}()
 				}
 			}
 			if p.Price != lastPrice {
