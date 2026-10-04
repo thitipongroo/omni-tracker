@@ -36,7 +36,7 @@ func AddProduct(c *fiber.Ctx) error {
 	validHosts := []string{"shopee.co.th", "lazada.co.th"}
 	isValidHost := false
 	for _, host := range validHosts {
-		if strings.HasSuffix(parsedURL.Host, host) {
+		if parsedURL.Host == host || strings.HasSuffix(parsedURL.Host, "."+host) {
 			isValidHost = true
 			break
 		}

@@ -1,6 +1,9 @@
 import os
 import json
 import asyncio
+import hmac
+import hashlib
+import base64
 import httpx
 import asyncpg
 from fastapi import FastAPI, BackgroundTasks, Request
@@ -21,6 +24,7 @@ INFLUX_TOKEN = os.getenv("INFLUXDB_TOKEN", "super-secret-token")
 INFLUX_ORG = os.getenv("INFLUXDB_ORG", "my-org")
 INFLUX_BUCKET = os.getenv("INFLUXDB_BUCKET", "market-data")
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
+LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 if GEMINI_API_KEY:
@@ -439,8 +443,18 @@ async def trigger_analysis(line_user_id: str, product_id: str, store: str):
 @app.post("/webhook/line")
 async def line_webhook(request: Request):
     """Receive webhook events from LINE Messaging API (e.g., Postback actions)"""
+    signature = request.headers.get("x-line-signature")
+    body_bytes = await request.body()
+    
+    if LINE_CHANNEL_SECRET and signature:
+        hash = hmac.new(LINE_CHANNEL_SECRET.encode('utf-8'), body_bytes, hashlib.sha256).digest()
+        expected_signature = base64.b64encode(hash).decode('utf-8')
+        if signature != expected_signature:
+            print("Webhook signature validation failed")
+            return {"status": "error", "message": "Invalid signature"}
+
     try:
-        body = await request.json()
+        body = json.loads(body_bytes.decode('utf-8'))
         events = body.get("events", [])
         
         for event in events:

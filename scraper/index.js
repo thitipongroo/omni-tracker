@@ -140,12 +140,12 @@ async function processTask(browser, task) {
                 console.log(`📦 [${task.product_id}] DOM Parse Success! Price: ${priceValue} THB`);
                 await sendLog(task.product_id, task.store, `DOM Parse Fallback Success: ${priceValue}`, 'INFO');
             } catch (err) {
-                console.log(`⚠️ API Intercept & Selector '${task.selector}' failed. Using fallback.`);
+                console.log(`⚠️ API Intercept & Selector '${task.selector}' failed.`);
                 await sendLog(task.product_id, task.store, `DOM locator failed: ${err.message}`, 'WARN');
-                priceValue = Math.floor(Math.random() * (15000 - 10000 + 1)) + 10000;
+                throw new Error('Failed to extract price via XHR and DOM');
             }
         } else {
-            priceValue = Math.floor(Math.random() * (15000 - 10000 + 1)) + 10000;
+            throw new Error('No price found and no DOM selector provided');
         }
 
         await axios.post(`${API_URL}/api/prices`, {

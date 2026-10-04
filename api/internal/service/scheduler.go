@@ -17,17 +17,28 @@ func StartTaskScheduler(ctx context.Context) {
 	go func() {
 		defer ticker.Stop()
 		// Run once immediately
-		PushTasksToQueue()
+		tryPushTasks()
 		for {
 			select {
 			case <-ticker.C:
-				PushTasksToQueue()
+				tryPushTasks()
 			case <-ctx.Done():
 				log.Println("Stopping Task Scheduler...")
 				return
 			}
 		}
 	}()
+}
+
+func tryPushTasks() {
+	lockKey := "scheduler:lock"
+	// Try to acquire lock for 9 minutes (just below the 10 min interval)
+	acquired, err := repository.RDB.SetNX(repository.Ctx, lockKey, "locked", 9*time.Minute).Result()
+	if err != nil || !acquired {
+		log.Println("📥 [Scheduler] Another instance is running the scheduler. Skipping.")
+		return
+	}
+	PushTasksToQueue()
 }
 
 func PushTasksToQueue() {
