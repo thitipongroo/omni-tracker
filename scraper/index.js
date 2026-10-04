@@ -169,37 +169,46 @@ async function processTask(browser, task) {
 
 let taskCount = 0;
 const MAX_TASKS_BEFORE_RESTART = 500;
+let activeTasks = 0;
+let shouldRestart = false;
 
 async function runScraperFleet() {
     console.log('🚀 Initializing Evasive Scraper Fleet with Proxy Rotation & API Intercept...');
     let browser = await chromium.launch({ headless: true });
     
     const redis = createRedisClient();
-    console.log(`👷 Main Worker started, batch processing up to ${CONCURRENCY_LIMIT} tasks concurrently...`);
+    console.log(`👷 Main Worker started, processing up to ${CONCURRENCY_LIMIT} tasks concurrently...`);
     
     while (true) {
+        if (shouldRestart && activeTasks === 0) {
+            console.log('♻️ Restarting browser to safely clear memory...');
+            await browser.close();
+            browser = await chromium.launch({ headless: true });
+            shouldRestart = false;
+            taskCount = 0;
+        }
+
+        if (activeTasks >= CONCURRENCY_LIMIT || shouldRestart) {
+            await new Promise(r => setTimeout(r, 500)); // Prevent CPU spin when full or restarting
+            continue;
+        }
+
         try {
-            let tasks = [];
-            for (let i = 0; i < CONCURRENCY_LIMIT; i++) {
-                const result = i === 0 ? await redis.brpop('scraper_tasks', 2) : await redis.rpop('scraper_tasks');
-                if (result) {
-                   tasks.push(JSON.parse(Array.isArray(result) ? result[1] : result));
-                } else {
-                   break;
-                }
-            }
-            
-            if (tasks.length > 0) {
-                console.log(`👷 Processing batch of ${tasks.length} tasks...`);
-                await Promise.all(tasks.map(task => processTask(browser, task).catch(e => console.error(e))));
+            // Pull single task to allow continuous processing (no batch waiting)
+            const result = await redis.brpop('scraper_tasks', 2);
+            if (result) {
+                const task = JSON.parse(Array.isArray(result) ? result[1] : result);
+                activeTasks++;
+                taskCount++;
                 
-                taskCount += tasks.length;
                 if (taskCount >= MAX_TASKS_BEFORE_RESTART) {
-                    console.log('♻️ Restarting browser to prevent memory leaks...');
-                    await browser.close();
-                    browser = await chromium.launch({ headless: true });
-                    taskCount = 0;
+                    shouldRestart = true;
                 }
+
+                // Process task asynchronously without blocking the loop
+                processTask(browser, task).catch(e => console.error(e)).finally(() => {
+                    activeTasks--;
+                });
             }
         } catch (error) {
             console.error(`👷 Worker encountered error:`, error.message);
