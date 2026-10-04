@@ -418,10 +418,9 @@ async def analyze_and_notify_with_lock():
             return
             
         try:
-            row = await conn.fetchrow("SELECT last_run FROM cron_locks WHERE job_name = $1", job_name)
-            if row and row['last_run']:
-                time_diff = (datetime.now() - row['last_run']).total_seconds()
-                if time_diff < 43200: # 12 hours
+            row = await conn.fetchrow("SELECT EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - last_run)) AS time_diff FROM cron_locks WHERE job_name = $1", job_name)
+            if row and row['time_diff'] is not None:
+                if float(row['time_diff']) < 43200: # 12 hours
                     print(f"[{datetime.now()}] AI Analysis job already ran recently. Skipping.")
                     return
             

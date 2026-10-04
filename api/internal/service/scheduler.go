@@ -61,7 +61,7 @@ func PushTasksToQueue() {
 	// Prevent duplicate scheduling: Only select products that haven't been scraped in the last 9 minutes
 	timeThreshold := time.Now().Add(-9 * time.Minute)
 	
-	repository.DB.Where("is_active = ? AND (last_scraped_at IS NULL OR last_scraped_at < ?)", true, timeThreshold).
+	repository.DB.Where("is_active = ? AND status != 'QUEUED' AND (last_scraped_at IS NULL OR last_scraped_at < ?)", true, timeThreshold).
 		FindInBatches(&[]models.Product{}, 500, func(tx *gorm.DB, batch int) error {
 		var products []models.Product
 		tx.Scan(&products)
@@ -75,6 +75,7 @@ func PushTasksToQueue() {
 			taskJSON, err := json.Marshal(task)
 			if err == nil {
 				repository.RDB.LPush(repository.Ctx, "scraper_tasks", taskJSON)
+				repository.DB.Model(&models.Product{}).Where("id = ?", p.ID).Update("status", "QUEUED")
 			}
 		}
 		total += len(products)
