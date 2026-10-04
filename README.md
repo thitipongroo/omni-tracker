@@ -85,7 +85,7 @@ flowchart LR
     GO -->|Async Write| INFLUX
     GO -->|Webhook| LINE
     CI -.->|Build & Deploy| GO
-    CI -.->|Build & Deploy| S1
+    CI -.->|Build & Deploy| Scrapers
     
     AI -->|Read History| INFLUX
     AI <-->|Query LLM| GEMINI
