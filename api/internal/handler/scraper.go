@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"time"
@@ -12,8 +13,6 @@ import (
 	"omni-tracker-api/internal/repository"
 	"omni-tracker-api/internal/service"
 )
-
-
 
 func UpdateStatus(c *fiber.Ctx) error {
 	var payload struct {
@@ -37,38 +36,47 @@ func PostPrice(cfg *config.Config) fiber.Handler {
 			return c.SendStatus(400)
 		}
 
-		// Protect database and graphs from zero/negative corrupted data
 		if p.Price <= 0 {
-			repository.DB.Model(&models.Product{}).Where("product_id = ? AND store = ?", p.ProductID, p.Store).Update("status", "FAILED")
+			repository.DB.Model(&models.Product{}).Where("id = ?", p.ID).Update("status", "FAILED")
 			return c.Status(400).SendString("Invalid price: must be greater than 0")
 		}
 
-		cacheKey := fmt.Sprintf("price:%s:%s", p.Store, p.ProductID)
-		lastPriceStr, err := repository.RDB.Get(repository.Ctx, cacheKey).Result()
+		var prod models.Product
+		if err := repository.DB.First(&prod, p.ID).Error; err != nil {
+			return c.Status(404).SendString("Product not found")
+		}
+
+		cacheKey := fmt.Sprintf("price:product_pk:%d", p.ID)
+		ctx := context.Background()
+		lastPriceStr, err := repository.RDB.Get(ctx, cacheKey).Result()
 
 		if err == redis.Nil {
-			repository.RDB.Set(repository.Ctx, cacheKey, p.Price, 0)
+			repository.RDB.Set(ctx, cacheKey, p.Price, 0)
 		} else if err == nil {
 			lastPrice, _ := strconv.ParseFloat(lastPriceStr, 64)
 
 			if p.Price < lastPrice*0.2 {
-				repository.DB.Model(&models.Product{}).Where("product_id = ? AND store = ?", p.ProductID, p.Store).Update("status", "ANOMALY")
-				return c.SendStatus(200) // Skip saving this weird data
+				repository.DB.Model(&models.Product{}).Where("id = ?", p.ID).Update("status", "ANOMALY")
+				return c.SendStatus(422) // Stop scraper from overwriting ANOMALY with SUCCESS later
 			}
 
-			if service.EvaluatePriceDrop(lastPrice, p.Price) {
-				msg := fmt.Sprintf("🚨 Price Drop Alert!\n%s at %s dropped from %.2f to %.2f THB\nLink: %s",
-					p.ProductID, p.Store, lastPrice, p.Price, p.URL)
-				go service.SendLineAlert(cfg.LineToken, msg)
+			// 5% price drop threshold
+			if service.EvaluatePriceDrop(lastPrice, p.Price, 5.0) {
+				var u models.User
+				if err := repository.DB.First(&u, prod.UserID).Error; err == nil && u.LineUserID != "" {
+					msg := fmt.Sprintf("🚨 Price Drop Alert!\n%s at %s dropped from %.2f to %.2f THB\nLink: %s",
+						prod.ProductID, prod.Store, lastPrice, p.Price, prod.URL)
+					go service.SendLinePush(context.Background(), cfg.LineChannelToken, u.LineUserID, msg)
+				}
 			}
 			if p.Price != lastPrice {
-				repository.RDB.Set(repository.Ctx, cacheKey, p.Price, 0)
+				repository.RDB.Set(ctx, cacheKey, p.Price, 0)
 			}
 		}
 
 		point := influxdb2.NewPointWithMeasurement("product_price").
-			AddTag("store", p.Store).
-			AddTag("product_id", p.ProductID).
+			AddTag("store", prod.Store).
+			AddTag("product_pk", strconv.Itoa(int(p.ID))).
 			AddField("price", p.Price).
 			SetTime(time.Now())
 		repository.WriteAPI.WritePoint(point)
@@ -104,6 +112,11 @@ func PostLog(c *fiber.Ctx) error {
 		return c.SendStatus(400)
 	}
 	logEntry.CreatedAt = time.Now()
+	
+	if !validLogLevels[logEntry.Level] {
+		logEntry.Level = "INFO"
+	}
+	
 	repository.DB.Create(logEntry)
 	return c.SendStatus(200)
 }
@@ -111,15 +124,17 @@ func PostLog(c *fiber.Ctx) error {
 func GetLogs(c *fiber.Ctx) error {
 	var logs []models.ScrapeLog
 	
-	if userID, ok := c.Locals("userID").(uint); ok {
-		var productIDs []string
-		repository.DB.Model(&models.Product{}).Where("user_id = ?", userID).Pluck("product_id", &productIDs)
-		
-		if len(productIDs) > 0 {
-			repository.DB.Where("product_id IN ?", productIDs).Order("created_at desc").Limit(100).Find(&logs)
-		}
+	userID, ok := currentUserID(c)
+	if !ok {
+		return jsonError(c, fiber.StatusUnauthorized, "Unauthorized")
+	}
+	
+	var productIDs []uint
+	repository.DB.Model(&models.Product{}).Where("user_id = ?", userID).Pluck("id", &productIDs)
+	
+	if len(productIDs) > 0 {
+		repository.DB.Where("product_pk IN ?", productIDs).Order("created_at desc").Limit(100).Find(&logs)
 	}
 	
 	return c.JSON(logs)
 }
-

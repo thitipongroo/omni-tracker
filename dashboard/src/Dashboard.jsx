@@ -18,7 +18,7 @@ export default function Dashboard({ token, setToken }) {
   const [loadingModal, setLoadingModal] = useState(false);
 
   const api = axios.create({
-    baseURL: '/api',
+    baseURL: '/api/v1',
     headers: { Authorization: `Bearer ${token}` }
   });
 
@@ -76,7 +76,7 @@ export default function Dashboard({ token, setToken }) {
     setChartData([]);
     
     try {
-      const histRes = await api.get(`/history/${product.product_id}`);
+      const histRes = await api.get(`/history/${product.id}`);
       // Format time for Recharts
       const formatted = (histRes.data || []).map(d => ({
         ...d,

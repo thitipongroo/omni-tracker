@@ -14,12 +14,24 @@ spec:
     spec:
       containers:
       - name: scraper
-        image: thitipongroo/omni-scraper:latest
+        image: thitipongroo/omni-scraper:v1.0.0
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
         env:
         - name: REDIS_URL
           value: "redis://redis-master:6379"
         - name: GO_API_URL
           value: "http://omni-go-api:3000"
+        - name: API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: omni-secrets
+              key: API_KEY
 ---
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject

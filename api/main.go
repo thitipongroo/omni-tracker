@@ -18,8 +18,8 @@ func main() {
 	cfg := config.LoadConfig()
 
 	// Initialize Storage Layer
-	repository.InitDB(cfg.DatabaseURL, cfg.AdminPass)
-	repository.InitRedis(cfg.RedisURL)
+	repository.InitDB(cfg.DatabaseURL, cfg.AdminPass, cfg.DBMaxOpen)
+	repository.InitRedis(cfg.RedisURL, cfg.RedisPass)
 	repository.InitInflux(cfg.InfluxURL, cfg.InfluxToken, cfg.InfluxOrg, cfg.InfluxBucket)
 
 	app := fiber.New()
@@ -59,12 +59,13 @@ func main() {
 		Expiration: 1 * time.Minute,
 	}), handler.Register)
 
-	// Protected User Routes
-	userRoutes := apiGroup.Group("", handler.UserMiddleware(cfg))
+	// Protected User Routes (Prefix with /v1 to avoid middleware leaking to sibling groups)
+	userRoutes := apiGroup.Group("/v1", handler.UserMiddleware(cfg))
 	
 	// User Profile
 	userRoutes.Get("/profile", handler.GetProfile)
-	userRoutes.Post("/profile/line", handler.UpdateLineID)
+	userRoutes.Post("/profile/line", handler.CreateLineLinkCode)
+	userRoutes.Delete("/profile/line", handler.UnlinkLine)
 	
 	// Product Management
 	userRoutes.Get("/products", handler.GetProducts)
@@ -73,7 +74,7 @@ func main() {
 		Expiration: 1 * time.Minute,
 	}), handler.AddProduct)
 	userRoutes.Delete("/products/:id", handler.DeleteProduct)
-	userRoutes.Get("/history/:product_id", handler.GetHistory(cfg))
+	userRoutes.Get("/history/:id", handler.GetHistory(cfg))
 	userRoutes.Get("/logs", handler.GetLogs)
 	
 	// Protected Admin Routes
@@ -81,14 +82,14 @@ func main() {
 	adminRoutes.Get("/configs", handler.GetConfigs)
 	adminRoutes.Post("/configs", handler.UpdateConfig)
 	
-	// Scraper Internal Routes
-	scraperRoutes := apiGroup.Group("", handler.ScraperMiddleware(cfg))
+	// Scraper Internal Routes (Prefix with /internal)
+	scraperRoutes := apiGroup.Group("/internal", handler.ScraperMiddleware(cfg))
 	scraperRoutes.Patch("/products/:id/status", handler.UpdateStatus)
 	scraperRoutes.Post("/prices", handler.PostPrice(cfg))
 	scraperRoutes.Post("/logs", handler.PostLog)
 
 	// Start internal background cron to push tasks to Message Queue
-	service.StartTaskScheduler(context.Background())
+	service.StartTaskScheduler(context.Background(), cfg)
 
 	log.Printf("🚀 Omni-Tracker API starting on port %s...", cfg.APIPort)
 	log.Fatal(app.Listen(":" + cfg.APIPort))
