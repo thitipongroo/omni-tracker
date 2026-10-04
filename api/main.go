@@ -31,6 +31,21 @@ func main() {
 	// Serve static UI from dist
 	app.Static("/", "./dashboard/dist")
 
+	// SPA Fallback for React Router (Prevents 404 on page refresh)
+	app.Use(func(c *fiber.Ctx) error {
+		if err := c.Next(); err != nil {
+			if e, ok := err.(*fiber.Error); ok && e.Code == fiber.StatusNotFound {
+				// Don't fallback for missing API routes
+				if len(c.Path()) >= 4 && c.Path()[:4] == "/api" {
+					return err
+				}
+				return c.SendFile("./dashboard/dist/index.html")
+			}
+			return err
+		}
+		return nil
+	})
+
 	apiGroup := app.Group("/api")
 	
 	// Public Route with Rate Limiter
