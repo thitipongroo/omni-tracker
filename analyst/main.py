@@ -84,6 +84,12 @@ async def init_services():
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
+                await conn.execute("""
+                    CREATE TABLE IF NOT EXISTS cron_locks (
+                        job_name VARCHAR(50) PRIMARY KEY,
+                        last_run TIMESTAMP
+                    )
+                """)
         except Exception as e:
             print(f"Error creating tables: {e}")
 
@@ -390,9 +396,40 @@ async def analyze_and_notify_async():
         await asyncio.gather(*tasks)
     print(f"[{datetime.now()}] Analysis complete.")
 
+async def analyze_and_notify_with_lock():
+    if not db_pool: return
+    
+    job_name = 'daily_ai_analysis'
+    LOCK_ID = 999123
+    
+    async with db_pool.acquire() as conn:
+        acquired = await conn.fetchval("SELECT pg_try_advisory_lock($1)", LOCK_ID)
+        if not acquired:
+            print(f"[{datetime.now()}] AI Analysis job is locked by another instance. Skipping.")
+            return
+            
+        try:
+            row = await conn.fetchrow("SELECT last_run FROM cron_locks WHERE job_name = $1", job_name)
+            if row and row['last_run']:
+                time_diff = (datetime.now() - row['last_run']).total_seconds()
+                if time_diff < 43200: # 12 hours
+                    print(f"[{datetime.now()}] AI Analysis job already ran recently. Skipping.")
+                    return
+            
+            await conn.execute("""
+                INSERT INTO cron_locks (job_name, last_run) 
+                VALUES ($1, CURRENT_TIMESTAMP)
+                ON CONFLICT (job_name) DO UPDATE SET last_run = CURRENT_TIMESTAMP
+            """, job_name)
+            
+            await analyze_and_notify_async()
+            
+        finally:
+            await conn.execute("SELECT pg_advisory_unlock($1)", LOCK_ID)
+
 # Scheduler setup
 scheduler = AsyncIOScheduler()
-scheduler.add_job(analyze_and_notify_async, 'cron', hour=8, minute=0)
+scheduler.add_job(analyze_and_notify_with_lock, 'cron', hour=8, minute=0)
 
 # FastAPI setup
 @asynccontextmanager
